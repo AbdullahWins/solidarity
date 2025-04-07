@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useRouter } from "expo-router";
-import { getStyles } from "./styles";
+import { getStyles } from "../components/styles/styles-barcode";
 import { countryCodeMap } from "./country-map";
 
 interface BarcodeScanningResult {

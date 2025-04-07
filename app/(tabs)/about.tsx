@@ -10,7 +10,7 @@ import {
   StatusBar,
   useColorScheme,
 } from "react-native";
-import { getStyles } from "./styles"; // import the styles
+import { getStyles } from "../../components/styles/styles-tab"; // import the styles
 
 export default function AboutUs() {
   const theme = useColorScheme();
