@@ -12,7 +12,6 @@ export default function HomeScreen() {
           headerRight: () => (
             <Image
               source={require("../../assets/images/icon.png")}
-              // resizeMode="contain"
               accessibilityLabel="Solidarity Logo"
               accessibilityRole="image"
               style={{ width: 28, height: 28, marginRight: 10 }}
