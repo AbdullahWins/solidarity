@@ -118,6 +118,8 @@ export const countryCodeMap: CountryCodeMap = {
   "888": "Singapore",
   "890": "India",
   "893": "Vietnam",
+  "894": "Bangladesh",
+  "895": "Myanmar",
   "896": "Pakistan",
   "899": "Indonesia",
   "900-919": "Austria",

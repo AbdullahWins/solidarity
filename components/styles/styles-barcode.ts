@@ -20,6 +20,13 @@ export const getStyles = (isDark: boolean) =>
       alignItems: "center",
       borderRadius: 6,
     },
+    permissionToggleButton: {
+      paddingVertical: 16,
+      paddingHorizontal: 24,
+      backgroundColor: isDark ? "#8b5cf6" : "#7e22ce",
+      alignItems: "center",
+      borderRadius: 6,
+    },
     activeToggle: {
       backgroundColor: isDark ? "#334155" : "#ffffff",
       shadowColor: isDark ? "#000" : "#000",
@@ -32,18 +39,24 @@ export const getStyles = (isDark: boolean) =>
       fontWeight: "600",
       color: isDark ? "#f8fafc" : "#4b5563",
     },
+    cameraAccessText: {
+      fontSize: 16,
+      color: isDark ? "#e2e8f0" : "#1e293b",
+      textAlign: "center",
+    },
     content: {
       flex: 1,
     },
     cameraContainer: {
       flex: 1,
-      justifyContent: "center",
+      justifyContent: "space-between",
       alignItems: "center",
       backgroundColor: isDark ? "#0f172a" : "#ffffff",
+      marginVertical: 16,
     },
     cameraBoundingBox: {
-      width: "80%",
-      height: "50%",
+      width: "90%",
+      height: "30%",
       overflow: "hidden",
       borderRadius: 16,
       borderWidth: 2,
@@ -60,11 +73,12 @@ export const getStyles = (isDark: boolean) =>
       color: isDark ? "#f8fafc" : "#4b5563",
       fontSize: 18,
       backgroundColor: isDark
-        ? "rgba(30, 41, 59, 0.8)"
-        : "rgba(255, 255, 255, 0.8)",
-      paddingHorizontal: 16,
-      paddingVertical: 8,
+        ? "rgba(139, 168, 218, 0.8)"
+        : "rgba(196, 143, 143, 0.8)",
+      paddingHorizontal: 40,
+      paddingVertical: 10,
       borderRadius: 50,
+      marginBottom: 16,
     },
     searchContainer: {
       flex: 1,
@@ -224,7 +238,14 @@ export const getStyles = (isDark: boolean) =>
       justifyContent: "center",
       alignItems: "center",
       padding: 16,
-      backgroundColor: isDark ? "#0f172a" : "#ffffff",
+      backgroundColor: isDark ? "#1e293b" : "#ffffff",
+    },
+    cameraPermissionContainer: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      padding: 16,
+      backgroundColor: isDark ? "#1e293b" : "#ffffff",
     },
     baseText: {
       fontSize: 16,

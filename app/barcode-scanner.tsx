@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Text,
   View,
@@ -7,6 +7,7 @@ import {
   TextInput,
   TouchableOpacity,
   useColorScheme,
+  Animated,
 } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useRouter } from "expo-router";
@@ -75,6 +76,59 @@ export default function CustomBarcodeScanner() {
   const [barcodeData, setBarcodeData] = useState<string | null>(null);
   const [searchText, setSearchText] = useState<string>("");
   const [lastScanTime, setLastScanTime] = useState<string | null>(null);
+
+  // Animated fade effect for the camera view
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(fadeAnim, {
+          toValue: 0.3,
+          duration: 700,
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 700,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, [fadeAnim]);
+
+  // Animation Camera border
+  const borderAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(borderAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: false,
+        }),
+        Animated.timing(borderAnim, {
+          toValue: 0,
+          duration: 1000,
+          useNativeDriver: false,
+        }),
+      ])
+    ).start();
+  }, []);
+
+  const animatedBorderStyle = {
+    borderColor: borderAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [
+        isDark ? "#8b5cf6" : "#7e22ce",
+        isDark ? "#7c3aed" : "#5b21b6",
+      ],
+    }),
+    borderWidth: borderAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [2, 4],
+    }),
+  };
 
   // Camera permissions
   const [permission, requestPermission] = useCameraPermissions();
@@ -163,13 +217,13 @@ export default function CustomBarcodeScanner() {
   if (!permission.granted) {
     // Camera permissions are not granted yet
     return (
-      <View style={styles.permissionContainer}>
-        <Text style={styles.paragraph}>No access to camera</Text>
+      <View style={styles.cameraPermissionContainer}>
+        {/* <Text style={styles.paragraph}>No access to camera</Text> */}
         <TouchableOpacity
-          style={styles.toggleButton}
+          style={styles.permissionToggleButton}
           onPress={requestPermission}
         >
-          <Text style={styles.toggleButtonText}>Grant Permission</Text>
+          <Text style={styles.cameraAccessText}>Grant Camera Permission</Text>
         </TouchableOpacity>
       </View>
     );
@@ -213,7 +267,9 @@ export default function CustomBarcodeScanner() {
               )}
             </View>
             <View style={styles.scanOverlay}>
-              <Text style={styles.scanText}>Scan a barcode</Text>
+              <Animated.Text style={[styles.scanText, { opacity: fadeAnim }]}>
+                🕵️ Scanning...
+              </Animated.Text>
             </View>
           </View>
         ) : (
