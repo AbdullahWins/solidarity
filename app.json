@@ -18,11 +18,7 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "permissions": [
-        "CAMERA",
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO"
-      ]
+      "permissions": []
     },
     "web": {
       "bundler": "metro",
@@ -44,6 +40,15 @@
         "expo-camera",
         {
           "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableProguardInReleaseBuilds": true,
+            "enableSeparateBuilds": true
+          }
         }
       ]
     ],
