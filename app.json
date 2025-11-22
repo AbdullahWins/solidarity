@@ -2,7 +2,7 @@
   "expo": {
     "name": "Solidarity",
     "slug": "Solidarity",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "solidarity",
@@ -14,6 +14,8 @@
     },
     "android": {
       "package": "com.abdullahwins.solidarity",
+      "targetSdkVersion": 35,
+      "enableProguardInReleaseBuilds": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
