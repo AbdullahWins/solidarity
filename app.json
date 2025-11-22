@@ -14,8 +14,6 @@
     },
     "android": {
       "package": "com.abdullahwins.solidarity",
-      "targetSdkVersion": 35,
-      "enableProguardInReleaseBuilds": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
