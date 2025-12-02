@@ -168,6 +168,17 @@ export const getStyles = (isDark: boolean) =>
       fontFamily: "monospace",
       color: isDark ? "#e2e8f0" : "#1e293b",
     },
+    resultsOverlay: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: "rgba(0,0,0,0.6)", // semi-transparent overlay
+      justifyContent: "center",
+      padding: 16,
+      zIndex: 10,
+    },
     flaggedAlert: {
       backgroundColor: isDark ? "#450a0a" : "#fef2f2",
       padding: 12,
