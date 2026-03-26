@@ -1,670 +1,360 @@
-// import React, { useState, useEffect, useRef } from "react";
-// import {
-//   Text,
-//   View,
-//   Alert,
-//   ScrollView,
-//   TextInput,
-//   TouchableOpacity,
-//   useColorScheme,
-//   Animated,
-// } from "react-native";
-// import { CameraView, useCameraPermissions } from "expo-camera";
-// import { useRouter } from "expo-router";
-// import { getStyles } from "../components/styles/styles-barcode";
-// import { countryCodeMap } from "./country-map";
-
-// interface BarcodeScanningResult {
-//   type: string;
-//   data: string;
-//   bounds?: any;
-// }
-
-// // Function to identify country from barcode
-// const identifyCountry = (barcode: string | null): string | null => {
-//   if (!barcode || typeof barcode !== "string") return null;
-
-//   // Clean the barcode - remove any non-numeric characters
-//   const cleanBarcode = barcode.replace(/\D/g, "");
-
-//   // Check if barcode is long enough
-//   if (cleanBarcode.length < 3) return null;
-
-//   // Get first 3 digits
-//   const prefix = cleanBarcode.substring(0, 3);
-//   const prefixNum = parseInt(prefix, 10);
-
-//   // Check exact match first
-//   if (countryCodeMap[prefix]) return countryCodeMap[prefix];
-
-//   // Check range matches
-//   for (const key of Object.keys(countryCodeMap)) {
-//     if (key.includes("-")) {
-//       const [min, max] = key.split("-").map((k) => parseInt(k, 10));
-//       if (prefixNum >= min && prefixNum <= max) {
-//         return countryCodeMap[key];
-//       }
-//     }
-//   }
-
-//   return null;
-// };
-
-// // Function to check if country should be flagged
-// const shouldFlagCountry = (country: string | null): boolean => {
-//   if (!country) return false;
-
-//   const lowercaseCountry = country.toLowerCase();
-//   return (
-//     lowercaseCountry.includes("india") ||
-//     lowercaseCountry.includes("israel") ||
-//     lowercaseCountry.includes("usa") ||
-//     lowercaseCountry.includes("united states") ||
-//     lowercaseCountry.includes("america") ||
-//     lowercaseCountry.includes("canada")
-//   );
-// };
-
-// export default function CustomBarcodeScanner() {
-//   const colorScheme = useColorScheme();
-//   const isDark = colorScheme === "dark";
-//   const styles = getStyles(isDark);
-
-//   const [scanned, setScanned] = useState<boolean>(false);
-//   const [showCamera, setShowCamera] = useState<boolean>(true);
-//   const [originCountry, setOriginCountry] = useState<string | null>(null);
-//   const [barcodeData, setBarcodeData] = useState<string | null>(null);
-//   const [searchText, setSearchText] = useState<string>("");
-//   const [lastScanTime, setLastScanTime] = useState<string | null>(null);
-
-//   // Animated fade effect for the camera view
-//   const fadeAnim = useRef(new Animated.Value(1)).current;
-//   useEffect(() => {
-//     Animated.loop(
-//       Animated.sequence([
-//         Animated.timing(fadeAnim, {
-//           toValue: 0.3,
-//           duration: 700,
-//           useNativeDriver: true,
-//         }),
-//         Animated.timing(fadeAnim, {
-//           toValue: 1,
-//           duration: 700,
-//           useNativeDriver: true,
-//         }),
-//       ])
-//     ).start();
-//   }, [fadeAnim]);
-
-//   // Animation Camera border
-//   const borderAnim = useRef(new Animated.Value(0)).current;
-
-//   useEffect(() => {
-//     Animated.loop(
-//       Animated.sequence([
-//         Animated.timing(borderAnim, {
-//           toValue: 1,
-//           duration: 1000,
-//           useNativeDriver: false,
-//         }),
-//         Animated.timing(borderAnim, {
-//           toValue: 0,
-//           duration: 1000,
-//           useNativeDriver: false,
-//         }),
-//       ])
-//     ).start();
-//   }, []);
-
-//   const animatedBorderStyle = {
-//     borderColor: borderAnim.interpolate({
-//       inputRange: [0, 1],
-//       outputRange: [
-//         isDark ? "#8b5cf6" : "#7e22ce",
-//         isDark ? "#7c3aed" : "#5b21b6",
-//       ],
-//     }),
-//     borderWidth: borderAnim.interpolate({
-//       inputRange: [0, 1],
-//       outputRange: [2, 4],
-//     }),
-//   };
-
-//   // Camera permissions
-//   const [permission, requestPermission] = useCameraPermissions();
-
-//   // Router for expo-router
-//   const router = useRouter();
-
-//   // Current date/time
-//   const getCurrentDateTime = () => {
-//     return new Date().toISOString().replace("T", " ").substring(0, 19);
-//   };
-
-//   // Reset scanner when the screen comes into focus
-//   useEffect(() => {
-//     if (showCamera) {
-//       setScanned(false);
-//     }
-//   }, [showCamera]);
-
-//   const handleBarCodeScanned = (scanningResult: BarcodeScanningResult) => {
-//     if (scanned) return;
-
-//     const { type, data } = scanningResult;
-//     setScanned(true);
-//     setBarcodeData(data);
-//     setLastScanTime(getCurrentDateTime());
-
-//     try {
-//       console.log("Scanned data:", data);
-
-//       // Check if data is valid
-//       if (!data) {
-//         Alert.alert("Invalid Data", "No barcode data received");
-//         setTimeout(() => setScanned(false), 2000);
-//         return;
-//       }
-
-//       // Identify country from barcode
-//       const country = identifyCountry(data);
-//       setOriginCountry(country || "Unknown");
-//       setShowCamera(false); // Always show results
-//     } catch (error) {
-//       console.error("Error processing barcode:", error);
-//       Alert.alert("Error", "Failed to process barcode data");
-//       setTimeout(() => setScanned(false), 2000);
-//     }
-//   };
-
-//   const searchBarcode = () => {
-//     if (!searchText.trim()) {
-//       Alert.alert("Error", "Please enter a barcode");
-//       return;
-//     }
-
-//     // Identify country from search text if it's a barcode
-//     const country = identifyCountry(searchText);
-//     setOriginCountry(country || "Unknown");
-//     setBarcodeData(searchText);
-//     setLastScanTime(getCurrentDateTime());
-
-//     if (country) {
-//       setShowCamera(false); // Show results
-//     } else {
-//       Alert.alert("Not Found", "Could not identify country from this barcode");
-//     }
-//   };
-
-//   const resetSearch = () => {
-//     setScanned(false);
-//     setSearchText("");
-//     setOriginCountry(null);
-//     setBarcodeData(null);
-//     setLastScanTime(null);
-//     setShowCamera(true);
-//   };
-
-//   if (!permission) {
-//     // Camera permissions are still loading
-//     return (
-//       <View style={styles.safeArea}>
-//         <Text style={styles.paragraph}>Requesting camera permission...</Text>
-//       </View>
-//     );
-//   }
-
-//   if (!permission.granted) {
-//     // Camera permissions are not granted yet
-//     return (
-//       <View style={styles.cameraPermissionContainer}>
-//         {/* <Text style={styles.paragraph}>No access to camera</Text> */}
-//         <TouchableOpacity
-//           style={styles.permissionToggleButton}
-//           onPress={requestPermission}
-//         >
-//           <Text style={styles.cameraAccessText}>Grant Camera Permission</Text>
-//         </TouchableOpacity>
-//       </View>
-//     );
-//   }
-
-//   return (
-//     <View style={styles.container}>
-//       {/* Toggle buttons at the top */}
-//       <View style={styles.toggleContainer}>
-//         <TouchableOpacity
-//           style={[styles.toggleButton, showCamera && styles.activeToggle]}
-//           onPress={() => {
-//             setShowCamera(true);
-//             setScanned(false);
-//           }}
-//         >
-//           <Text style={styles.toggleButtonText}>Scanner</Text>
-//         </TouchableOpacity>
-//         <TouchableOpacity
-//           style={[styles.toggleButton, !showCamera && styles.activeToggle]}
-//           onPress={() => setShowCamera(false)}
-//         >
-//           <Text style={styles.toggleButtonText}>Search</Text>
-//         </TouchableOpacity>
-//       </View>
-
-//       {/* Main content area */}
-//       <View style={styles.content}>
-//         {showCamera ? (
-//           // Camera Scanner View - SMALLER SIZE
-//           <View style={styles.cameraContainer}>
-//             <View style={styles.cameraBoundingBox}>
-//               {!scanned && (
-//                 <CameraView
-//                   style={styles.camera}
-//                   onBarcodeScanned={handleBarCodeScanned}
-//                   barcodeScannerSettings={{
-//                     barcodeTypes: ["qr", "upc_e", "ean13"],
-//                   }}
-//                 />
-//               )}
-//             </View>
-//             <View style={styles.scanOverlay}>
-//               <Animated.Text style={[styles.scanText, { opacity: fadeAnim }]}>
-//                 🕵️ Scanning...
-//               </Animated.Text>
-//             </View>
-//           </View>
-//         ) : (
-//           // Search View
-//           <View style={styles.searchContainer}>
-//             {/* Search bar - only in search tab */}
-//             <View style={styles.searchBarContainer}>
-//               <TextInput
-//                 style={styles.searchInput}
-//                 value={searchText}
-//                 onChangeText={setSearchText}
-//                 placeholder="Enter barcode number..."
-//                 placeholderTextColor={isDark ? "#94a3b8" : "#999"}
-//                 keyboardType="numeric"
-//               />
-//               <TouchableOpacity
-//                 style={styles.searchButton}
-//                 onPress={searchBarcode}
-//               >
-//                 <Text style={styles.searchButtonText}>Check</Text>
-//               </TouchableOpacity>
-//             </View>
-
-//             {/* Results Area */}
-//             <ScrollView
-//               style={styles.resultsScroll}
-//               contentContainerStyle={
-//                 originCountry ? styles.resultsWithContent : styles.resultsEmpty
-//               }
-//             >
-//               {originCountry ? (
-//                 <View style={styles.resultsContainer}>
-//                   {/* Origin country information */}
-//                   <View
-//                     style={[
-//                       styles.countryCard,
-//                       shouldFlagCountry(originCountry)
-//                         ? styles.flaggedCountryCard
-//                         : styles.safeCountryCard,
-//                     ]}
-//                   >
-//                     <Text style={styles.countryName}>{originCountry}</Text>
-
-//                     <Text style={styles.fieldLabel}>Product Barcode:</Text>
-//                     <Text style={styles.barcodeText}>{barcodeData}</Text>
-
-//                     {shouldFlagCountry(originCountry) ? (
-//                       <View style={styles.flaggedAlert}>
-//                         <Text style={styles.flaggedText}>
-//                           This product's barcode is registered in{" "}
-//                           {originCountry}
-//                         </Text>
-//                       </View>
-//                     ) : (
-//                       <View style={styles.safeAlert}>
-//                         <Text style={styles.safeText}>
-//                           This product's barcode is registered in{" "}
-//                           {originCountry}
-//                         </Text>
-//                       </View>
-//                     )}
-
-//                     {lastScanTime && (
-//                       <Text style={styles.timestampText}>
-//                         Scanned: {lastScanTime}
-//                       </Text>
-//                     )}
-//                   </View>
-
-//                   <Text style={styles.disclaimerText}>
-//                     Note: This indicates where the barcode was registered, not
-//                     necessarily where the product was manufactured.
-//                   </Text>
-
-//                   <TouchableOpacity
-//                     style={styles.resetButton}
-//                     onPress={resetSearch}
-//                   >
-//                     <Text style={styles.resetButtonText}>Scan Again</Text>
-//                   </TouchableOpacity>
-//                 </View>
-//               ) : (
-//                 <View style={styles.emptyContainer}>
-//                   <Text style={styles.emptyText}>
-//                     {searchText.trim()
-//                       ? "Enter a complete barcode number to check origin."
-//                       : "Enter a barcode number or scan a product barcode."}
-//                   </Text>
-//                 </View>
-//               )}
-//             </ScrollView>
-//           </View>
-//         )}
-//       </View>
-//     </View>
-//   );
-// }
-
-import React, { useState, useEffect, useRef } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  Text,
-  View,
   Alert,
   ScrollView,
+  Text,
   TextInput,
   TouchableOpacity,
+  View,
   useColorScheme,
-  Animated,
 } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
+import { useIsFocused } from "@react-navigation/native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
+
+import { countryCodeMap } from "../constants/country-map";
 import { getStyles } from "../components/styles/styles-barcode";
-import { countryCodeMap } from "./country-map";
 
-interface BarcodeScanningResult {
-  type: string;
+type ActiveTab = "search" | "scanner";
+
+type ScanRecord = {
+  id: string;
+  code: string;
+  country: string;
+  isPositive: boolean;
+  source: "camera" | "manual";
+  scannedAt: string;
+};
+
+type BarcodeScanningResult = {
   data: string;
-  bounds?: any;
-}
+};
 
-// Identify country from barcode
 const identifyCountry = (barcode: string | null): string | null => {
   if (!barcode || typeof barcode !== "string") return null;
+
   const cleanBarcode = barcode.replace(/\D/g, "");
   if (cleanBarcode.length < 3) return null;
+
   const prefix = cleanBarcode.substring(0, 3);
   const prefixNum = parseInt(prefix, 10);
 
   if (countryCodeMap[prefix]) return countryCodeMap[prefix];
 
   for (const key of Object.keys(countryCodeMap)) {
-    if (key.includes("-")) {
-      const [min, max] = key.split("-").map(Number);
-      if (prefixNum >= min && prefixNum <= max) return countryCodeMap[key];
+    if (!key.includes("-")) continue;
+    const [min, max] = key.split("-").map(Number);
+    if (prefixNum >= min && prefixNum <= max) {
+      return countryCodeMap[key];
     }
   }
+
   return null;
 };
 
-// Should flag country
-const shouldFlagCountry = (country: string | null): boolean => {
-  if (!country) return false;
-  const c = country.toLowerCase();
+const isPositiveCountry = (country: string): boolean => {
+  const normalized = country.toLowerCase();
   return (
-    c.includes("india") ||
-    c.includes("israel") ||
-    c.includes("usa") ||
-    c.includes("united states") ||
-    c.includes("america") ||
-    c.includes("canada")
+    normalized.includes("india") ||
+    normalized.includes("israel") ||
+    normalized.includes("usa") ||
+    normalized.includes("united states") ||
+    normalized.includes("america") ||
+    normalized.includes("canada")
   );
 };
 
+const getCurrentDateTime = () =>
+  new Date().toISOString().replace("T", " ").substring(0, 19);
+
 export default function CustomBarcodeScanner() {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === "dark";
+  const isDark = useColorScheme() === "dark";
+  const isFocused = useIsFocused();
   const styles = getStyles(isDark);
 
-  const [scanned, setScanned] = useState<boolean>(false);
-  const [showResults, setShowResults] = useState<boolean>(false);
-  const [originCountry, setOriginCountry] = useState<string | null>(null);
-  const [barcodeData, setBarcodeData] = useState<string | null>(null);
-  const [searchText, setSearchText] = useState<string>("");
-  const [lastScanTime, setLastScanTime] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<ActiveTab>("search");
+  const [manualCode, setManualCode] = useState<string>("");
+  const [cameraKey, setCameraKey] = useState<number>(0);
+  const [readyToScan, setReadyToScan] = useState<boolean>(true);
+  const [history, setHistory] = useState<ScanRecord[]>([]);
+  const [latestRecord, setLatestRecord] = useState<ScanRecord | null>(null);
 
-  // Fade animation
-  const fadeAnim = useRef(new Animated.Value(1)).current;
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(fadeAnim, {
-          toValue: 0.3,
-          duration: 700,
-          useNativeDriver: true,
-        }),
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 700,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-  }, []);
-
-  // Border animation
-  const borderAnim = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(borderAnim, {
-          toValue: 1,
-          duration: 1000,
-          useNativeDriver: false,
-        }),
-        Animated.timing(borderAnim, {
-          toValue: 0,
-          duration: 1000,
-          useNativeDriver: false,
-        }),
-      ])
-    ).start();
-  }, []);
-
-  const animatedBorderStyle = {
-    borderColor: borderAnim.interpolate({
-      inputRange: [0, 1],
-      outputRange: [
-        isDark ? "#8b5cf6" : "#7e22ce",
-        isDark ? "#7c3aed" : "#5b21b6",
-      ],
-    }),
-    borderWidth: borderAnim.interpolate({
-      inputRange: [0, 1],
-      outputRange: [2, 4],
-    }),
-  };
-
-  // Camera permissions
   const [permission, requestPermission] = useCameraPermissions();
 
-  const getCurrentDateTime = () => {
-    return new Date().toISOString().replace("T", " ").substring(0, 19);
+  useEffect(() => {
+    if (isFocused && activeTab === "search") {
+      setReadyToScan(true);
+      setCameraKey((value) => value + 1);
+    }
+  }, [activeTab, isFocused]);
+
+  const stats = useMemo(() => {
+    const total = history.length;
+    const positive = history.filter((item) => item.isPositive).length;
+    const negative = total - positive;
+    return { total, positive, negative };
+  }, [history]);
+
+  const addScanRecord = (barcode: string, source: "camera" | "manual") => {
+    const country = identifyCountry(barcode) || "Unknown";
+    const positive = isPositiveCountry(country);
+
+    const record: ScanRecord = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      code: barcode,
+      country,
+      isPositive: positive,
+      source,
+      scannedAt: getCurrentDateTime(),
+    };
+
+    setLatestRecord(record);
+    setHistory((current) => [record, ...current].slice(0, 60));
+    setActiveTab("scanner");
   };
 
-  const handleBarCodeScanned = (scanningResult: BarcodeScanningResult) => {
-    if (scanned) return;
-
-    const { data } = scanningResult;
-    setScanned(true);
-    setBarcodeData(data);
-    setLastScanTime(getCurrentDateTime());
+  const handleBarCodeScanned = ({ data }: BarcodeScanningResult) => {
+    if (!readyToScan) return;
 
     if (!data) {
-      Alert.alert("Invalid Data", "No barcode data received");
-      setScanned(false);
+      Alert.alert("Invalid Scan", "No barcode value was detected.");
       return;
-    }
-
-    const country = identifyCountry(data);
-    setOriginCountry(country || "Unknown");
-    setShowResults(true);
-  };
-
-  const searchBarcode = () => {
-    if (!searchText.trim()) {
-      Alert.alert("Error", "Please enter a barcode");
-      return;
-    }
-    const country = identifyCountry(searchText);
-    setOriginCountry(country || "Unknown");
-    setBarcodeData(searchText);
-    setLastScanTime(getCurrentDateTime());
-
-    if (country) {
-      setShowResults(true);
-    } else {
-      Alert.alert("Not Found", "Could not identify country from this barcode");
     }
   };
 
-  const resetScan = () => {
-    setScanned(false);
-    setShowResults(false);
-    setOriginCountry(null);
-    setBarcodeData(null);
-    setLastScanTime(null);
-    setSearchText("");
+  const handleManualSearch = () => {
+    const cleaned = manualCode.trim();
+    if (!cleaned) {
+      Alert.alert("Missing Barcode", "Enter a barcode to continue.");
+      return;
+    }
+
+    addScanRecord(cleaned, "manual");
+    setManualCode("");
+  };
+
+  const prepareNextScan = () => {
+    setActiveTab("search");
+    setReadyToScan(true);
+    setCameraKey((value) => value + 1);
+  };
+
+  const clearHistory = () => {
+    setHistory([]);
+    setLatestRecord(null);
   };
 
   if (!permission) {
     return (
-      <View style={styles.safeArea}>
-        <Text style={styles.paragraph}>Requesting camera permission...</Text>
-      </View>
+      <SafeAreaView style={styles.screen}>
+        <View style={styles.centeredState}>
+          <Text style={styles.stateTitle}>Preparing camera</Text>
+          <Text style={styles.stateText}>Checking permission status...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   if (!permission.granted) {
     return (
-      <View style={styles.cameraPermissionContainer}>
-        <TouchableOpacity
-          style={styles.permissionToggleButton}
-          onPress={requestPermission}
-        >
-          <Text style={styles.cameraAccessText}>Grant Camera Permission</Text>
-        </TouchableOpacity>
-      </View>
+      <SafeAreaView style={styles.screen}>
+        <View style={styles.centeredState}>
+          <Text style={styles.stateTitle}>Camera permission required</Text>
+          <Text style={styles.stateText}>
+            Allow camera access to scan product barcodes.
+          </Text>
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={requestPermission}
+          >
+            <Text style={styles.primaryButtonText}>Grant Permission</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.container}>
-      {/* Toggle Scanner/Search */}
-      <View style={styles.toggleContainer}>
-        <TouchableOpacity
-          style={[styles.toggleButton, styles.activeToggle]}
-          onPress={() => resetScan()}
-        >
-          <Text style={styles.toggleButtonText}>Scanner</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.toggleButton, !showResults && styles.activeToggle]}
-          onPress={() => setShowResults(false)}
-        >
-          <Text style={styles.toggleButtonText}>Search</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.content}>
-        {/* Camera is always mounted */}
-        <View style={styles.cameraContainer}>
-          <View style={styles.cameraBoundingBox}>
-            <CameraView
-              style={styles.camera}
-              onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
-              barcodeScannerSettings={{
-                barcodeTypes: ["qr", "upc_e", "ean13"],
-              }}
-            />
-          </View>
-          <View style={styles.scanOverlay}>
-            <Animated.Text style={[styles.scanText, { opacity: fadeAnim }]}>
-              🕵️ Scanning...
-            </Animated.Text>
-          </View>
-        </View>
-
-        {/* Search Input */}
-        <View style={styles.searchBarContainer}>
-          <TextInput
-            style={styles.searchInput}
-            value={searchText}
-            onChangeText={setSearchText}
-            placeholder="Enter barcode number..."
-            placeholderTextColor={isDark ? "#94a3b8" : "#999"}
-            keyboardType="numeric"
-          />
-          <TouchableOpacity style={styles.searchButton} onPress={searchBarcode}>
-            <Text style={styles.searchButtonText}>Check</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Results Overlay */}
-        {showResults && originCountry && (
-          <View style={styles.resultsOverlay}>
-            <ScrollView style={styles.resultsScroll}>
-              <View style={styles.resultsContainer}>
-                <View
-                  style={[
-                    styles.countryCard,
-                    shouldFlagCountry(originCountry)
-                      ? styles.flaggedCountryCard
-                      : styles.safeCountryCard,
-                  ]}
-                >
-                  <Text style={styles.countryName}>{originCountry}</Text>
-                  <Text style={styles.fieldLabel}>Product Barcode:</Text>
-                  <Text style={styles.barcodeText}>{barcodeData}</Text>
-
-                  {shouldFlagCountry(originCountry) ? (
-                    <View style={styles.flaggedAlert}>
-                      <Text style={styles.flaggedText}>
-                        This product's barcode is registered in {originCountry}
-                      </Text>
-                    </View>
-                  ) : (
-                    <View style={styles.safeAlert}>
-                      <Text style={styles.safeText}>
-                        This product's barcode is registered in {originCountry}
-                      </Text>
-                    </View>
-                  )}
-
-                  {lastScanTime && (
-                    <Text style={styles.timestampText}>
-                      Scanned: {lastScanTime}
-                    </Text>
-                  )}
-                </View>
-
-                <Text style={styles.disclaimerText}>
-                  Note: This indicates where the barcode was registered, not
-                  necessarily where the product was manufactured.
-                </Text>
-
-                <TouchableOpacity
-                  style={styles.resetButton}
-                  onPress={resetScan}
-                >
-                  <Text style={styles.resetButtonText}>Scan Again</Text>
-                </TouchableOpacity>
+    <SafeAreaView style={styles.screen} edges={["left", "right"]}>
+      <StatusBar hidden />
+      <View style={styles.mainContent}>
+        {activeTab === "scanner" ? (
+          <ScrollView
+            contentContainerStyle={styles.searchContent}
+            showsVerticalScrollIndicator={false}
+          >
+          <View style={styles.cameraCard}>
+            <View style={styles.cameraFrame}>
+              {isFocused ? (
+                <CameraView
+                  key={`camera-${cameraKey}`}
+                  style={styles.camera}
+                  onBarcodeScanned={readyToScan ? handleBarCodeScanned : undefined}
+                  barcodeScannerSettings={{
+                    barcodeTypes: ["qr", "upc_e", "ean13", "ean8"],
+                  }}
+                />
+              ) : (
+                <View style={styles.camera} />
+              )}
+              <View pointerEvents="none" style={styles.scanGuideWrap}>
+                <View style={styles.scanGuideLine} />
+                <View style={[styles.scanEdgeMark, styles.scanEdgeMarkLeft]} />
+                <View style={[styles.scanEdgeMark, styles.scanEdgeMarkRight]} />
               </View>
-            </ScrollView>
+            </View>
+
+            <Text style={styles.scanHintText}>
+              {readyToScan
+                ? "Point camera at a barcode"
+                : "Captured. Open Search tab to view analytics."}
+            </Text>
+
+            {!readyToScan && (
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={prepareNextScan}
+              >
+                <Text style={styles.secondaryButtonText}>Scan Another</Text>
+              </TouchableOpacity>
+            )}
           </View>
+
+          <View style={styles.manualCard}>
+            <Text style={styles.manualTitle}>Manual barcode lookup</Text>
+            <View style={styles.manualRow}>
+              <TextInput
+                style={styles.manualInput}
+                value={manualCode}
+                onChangeText={setManualCode}
+                placeholder="Enter barcode number"
+                placeholderTextColor={isDark ? "#94a3b8" : "#6b7280"}
+                keyboardType="number-pad"
+              />
+              <TouchableOpacity
+                style={styles.manualButton}
+                onPress={handleManualSearch}
+              >
+                <Text style={styles.manualButtonText}>Analyze</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          </ScrollView>
+        ) : (
+          <ScrollView
+            contentContainerStyle={styles.analyticsContent}
+            showsVerticalScrollIndicator={false}
+          >
+          <View style={styles.statsGrid}>
+            <View style={styles.statCard}>
+              <Text style={styles.statLabel}>Total scans</Text>
+              <Text style={styles.statValue}>{stats.total}</Text>
+            </View>
+            <View style={[styles.statCard, styles.positiveCard]}>
+              <Text style={styles.statLabel}>Positive scans</Text>
+              <Text style={styles.statValue}>{stats.positive}</Text>
+            </View>
+            <View style={[styles.statCard, styles.negativeCard]}>
+              <Text style={styles.statLabel}>Negative scans</Text>
+              <Text style={styles.statValue}>{stats.negative}</Text>
+            </View>
+          </View>
+
+          {latestRecord && (
+            <View style={styles.latestCard}>
+              <Text style={styles.latestTitle}>Latest result</Text>
+              <Text style={styles.latestCountry}>{latestRecord.country}</Text>
+              <Text style={styles.latestMeta}>Barcode: {latestRecord.code}</Text>
+              <Text style={styles.latestMeta}>Source: {latestRecord.source}</Text>
+              <Text
+                style={[
+                  styles.latestTone,
+                  latestRecord.isPositive
+                    ? styles.positiveTone
+                    : styles.negativeTone,
+                ]}
+              >
+                {latestRecord.isPositive ? "Positive" : "Negative"}
+              </Text>
+            </View>
+          )}
+
+          <View style={styles.historySection}>
+            <View style={styles.historyHeader}>
+              <Text style={styles.historyTitle}>Recent scans</Text>
+              <TouchableOpacity onPress={clearHistory}>
+                <Text style={styles.clearHistoryText}>Clear</Text>
+              </TouchableOpacity>
+            </View>
+
+            {history.length === 0 ? (
+              <View style={styles.emptyStateCard}>
+                <Text style={styles.emptyStateText}>
+                  No scans yet. Use Scanner tab to start scanning.
+                </Text>
+              </View>
+            ) : (
+              history.map((item) => (
+                <View key={item.id} style={styles.historyItem}>
+                  <View>
+                    <Text style={styles.historyCountry}>{item.country}</Text>
+                    <Text style={styles.historyCode}>{item.code}</Text>
+                  </View>
+                  <View style={styles.historyRight}>
+                    <Text
+                      style={[
+                        styles.historyTone,
+                        item.isPositive ? styles.positiveTone : styles.negativeTone,
+                      ]}
+                    >
+                      {item.isPositive ? "Positive" : "Negative"}
+                    </Text>
+                    <Text style={styles.historyTime}>{item.scannedAt}</Text>
+                  </View>
+                </View>
+              ))
+            )}
+          </View>
+          </ScrollView>
         )}
       </View>
-    </View>
+
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[
+            styles.tabButton,
+            activeTab === "scanner" ? styles.tabButtonActive : undefined,
+          ]}
+          onPress={() => setActiveTab("scanner")}
+        >
+          <Text
+            style={[
+              styles.tabButtonText,
+              activeTab === "scanner" ? styles.tabButtonTextActive : undefined,
+            ]}
+          >
+            Scanner
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.tabButton,
+            activeTab === "search" ? styles.tabButtonActive : undefined,
+          ]}
+          onPress={() => setActiveTab("search")}
+        >
+          <Text
+            style={[
+              styles.tabButtonText,
+              activeTab === "search" ? styles.tabButtonTextActive : undefined,
+            ]}
+          >
+            Search
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
   );
 }

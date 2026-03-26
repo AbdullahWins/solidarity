@@ -1,320 +1,360 @@
 import { StyleSheet } from "react-native";
 
-export const getStyles = (isDark: boolean) =>
-  StyleSheet.create({
-    container: {
+export const getStyles = (isDark: boolean) => {
+  const colors = isDark
+    ? {
+        bg: "#000000",
+        panel: "rgba(255, 255, 255, 0.07)",
+        panelSoft: "rgba(255, 255, 255, 0.04)",
+        text: "#f3f4f6",
+        subtext: "#9ca3af",
+        accent: "#60a5fa",
+        accentStrong: "#3b82f6",
+        border: "rgba(255, 255, 255, 0.14)",
+        positive: "#86efac",
+        negative: "#fda4af",
+      }
+    : {
+        bg: "#000000",
+        panel: "rgba(255, 255, 255, 0.07)",
+        panelSoft: "rgba(255, 255, 255, 0.04)",
+        text: "#f3f4f6",
+        subtext: "#9ca3af",
+        accent: "#60a5fa",
+        accentStrong: "#3b82f6",
+        border: "rgba(255, 255, 255, 0.14)",
+        positive: "#86efac",
+        negative: "#fda4af",
+      };
+
+  return StyleSheet.create({
+    screen: {
       flex: 1,
-      backgroundColor: isDark ? "#0f172a" : "#ffffff",
+      backgroundColor: colors.bg,
     },
-    toggleContainer: {
+    mainContent: {
+      flex: 1,
+    },
+    tabContainer: {
+      marginHorizontal: 20,
+      marginTop: 10,
+      marginBottom: 14,
+      backgroundColor: colors.panelSoft,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
       flexDirection: "row",
-      backgroundColor: isDark ? "#1e293b" : "#f3f4f6",
       padding: 4,
-      marginHorizontal: 16,
-      marginVertical: 8,
-      borderRadius: 8,
     },
-    toggleButton: {
+    tabButton: {
       flex: 1,
-      paddingVertical: 8,
+      borderRadius: 10,
+      minHeight: 44,
       alignItems: "center",
-      borderRadius: 6,
+      justifyContent: "center",
+      paddingVertical: 10,
     },
-    permissionToggleButton: {
-      paddingVertical: 16,
-      paddingHorizontal: 24,
-      backgroundColor: isDark ? "#8b5cf6" : "#7e22ce",
-      alignItems: "center",
-      borderRadius: 6,
+    tabButtonActive: {
+      backgroundColor: "rgba(255, 255, 255, 0.12)",
     },
-    activeToggle: {
-      backgroundColor: isDark ? "#334155" : "#ffffff",
-      shadowColor: isDark ? "#000" : "#000",
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: isDark ? 0.3 : 0.1,
-      shadowRadius: 1,
-      elevation: 1,
-    },
-    toggleButtonText: {
+    tabButtonText: {
+      color: colors.subtext,
       fontWeight: "600",
-      color: isDark ? "#f8fafc" : "#4b5563",
+      fontSize: 14,
     },
-    cameraAccessText: {
-      fontSize: 16,
-      color: isDark ? "#e2e8f0" : "#1e293b",
-      textAlign: "center",
+    tabButtonTextActive: {
+      color: colors.text,
     },
-    content: {
-      flex: 1,
+    searchContent: {
+      paddingHorizontal: 20,
+      paddingTop: 10,
+      paddingBottom: 26,
+      gap: 14,
     },
-    cameraContainer: {
-      flex: 1,
-      justifyContent: "space-between",
-      alignItems: "center",
-      backgroundColor: isDark ? "#0f172a" : "#ffffff",
-      marginVertical: 16,
+    cameraCard: {
+      backgroundColor: colors.panel,
+      borderRadius: 20,
+      borderColor: colors.border,
+      borderWidth: 1,
+      padding: 14,
+      shadowColor: "#000",
+      shadowOpacity: 0.22,
+      shadowRadius: 14,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 4,
     },
-    cameraBoundingBox: {
-      width: "90%",
-      height: "30%",
-      overflow: "hidden",
+    cameraFrame: {
       borderRadius: 16,
-      borderWidth: 2,
-      borderColor: isDark ? "#8b5cf6" : "#7e22ce",
+      overflow: "hidden",
+      borderWidth: 1,
+      borderColor: colors.border,
+      height: 132,
+      backgroundColor: "#000",
     },
     camera: {
       width: "100%",
       height: "100%",
     },
-    scanOverlay: {
-      marginTop: 16,
-    },
-    scanText: {
-      color: isDark ? "#f8fafc" : "#4b5563",
-      fontSize: 18,
-      backgroundColor: isDark
-        ? "rgba(139, 168, 218, 0.8)"
-        : "rgba(196, 143, 143, 0.8)",
-      paddingHorizontal: 40,
-      paddingVertical: 10,
-      borderRadius: 50,
-      marginBottom: 16,
-    },
-    searchContainer: {
-      flex: 1,
-      backgroundColor: isDark ? "#0f172a" : "#ffffff",
-    },
-    searchBarContainer: {
-      flexDirection: "row",
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-      backgroundColor: isDark ? "#1e293b" : "#ffffff",
-      borderBottomWidth: 1,
-      borderBottomColor: isDark ? "#334155" : "#e5e7eb",
-    },
-    searchInput: {
-      flex: 1,
-      height: 40,
-      borderWidth: 1,
-      borderColor: isDark ? "#334155" : "#d1d5db",
-      borderRadius: 8,
-      paddingHorizontal: 12,
-      backgroundColor: isDark ? "#0f172a" : "#f9fafb",
-      color: isDark ? "#e2e8f0" : "#000000",
-    },
-    searchButton: {
-      marginLeft: 8,
-      backgroundColor: isDark ? "#8b5cf6" : "#7e22ce",
+    scanGuideWrap: {
+      ...StyleSheet.absoluteFillObject,
       justifyContent: "center",
       alignItems: "center",
-      paddingHorizontal: 16,
-      borderRadius: 8,
     },
-    searchButtonText: {
-      color: "#ffffff",
-      fontWeight: "600",
+    scanGuideLine: {
+      width: "78%",
+      height: 2,
+      backgroundColor: `${colors.accent}cc`,
+      borderRadius: 999,
     },
-    resultsScroll: {
-      flex: 1,
-      backgroundColor: isDark ? "#0f172a" : "#ffffff",
-    },
-    resultsWithContent: {
-      paddingVertical: 20,
-      paddingHorizontal: 20,
-    },
-    resultsEmpty: {
-      flexGrow: 1,
-      justifyContent: "center",
-      alignItems: "center",
-      padding: 20,
-    },
-    resultsContainer: {
-      alignItems: "center",
-      width: "100%",
-    },
-    countryCard: {
-      padding: 24,
-      borderRadius: 12,
-      width: "100%",
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: isDark ? 0.5 : 0.1,
-      shadowRadius: 2,
-      elevation: 2,
-      marginBottom: 16,
-    },
-    flaggedCountryCard: {
-      backgroundColor: isDark ? "#7f1d1d" : "#fee2e2",
-    },
-    safeCountryCard: {
-      backgroundColor: isDark ? "#064e3b" : "#d1fae5",
-    },
-    countryName: {
-      fontSize: 24,
-      fontWeight: "bold",
-      marginBottom: 16,
-      textAlign: "center",
-      color: isDark ? "#f8fafc" : "#1e293b",
-    },
-    fieldLabel: {
-      fontSize: 16,
-      marginBottom: 4,
-      fontWeight: "500",
-      color: isDark ? "#cbd5e1" : "#334155",
-    },
-    barcodeText: {
-      fontSize: 20,
-      marginBottom: 16,
-      fontFamily: "monospace",
-      color: isDark ? "#e2e8f0" : "#1e293b",
-    },
-    resultsOverlay: {
+    scanEdgeMark: {
       position: "absolute",
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: "rgba(0,0,0,0.6)", // semi-transparent overlay
-      justifyContent: "center",
-      padding: 16,
-      zIndex: 10,
+      width: 3,
+      height: "54%",
+      backgroundColor: `${colors.accent}cc`,
+      borderRadius: 999,
     },
-    flaggedAlert: {
-      backgroundColor: isDark ? "#450a0a" : "#fef2f2",
-      padding: 12,
-      borderRadius: 8,
-      borderWidth: 1,
-      borderColor: isDark ? "#b91c1c" : "#fecaca",
+    scanEdgeMarkLeft: {
+      left: "11%",
     },
-    flaggedText: {
-      color: isDark ? "#fca5a5" : "#991b1b",
-      fontWeight: "500",
+    scanEdgeMarkRight: {
+      right: "11%",
+    },
+    scanHintText: {
+      color: colors.subtext,
+      marginTop: 12,
+      fontSize: 13,
       textAlign: "center",
     },
-    safeAlert: {
-      backgroundColor: isDark ? "#022c22" : "#ecfdf5",
-      padding: 12,
-      borderRadius: 8,
-      borderWidth: 1,
-      borderColor: isDark ? "#059669" : "#a7f3d0",
-    },
-    safeText: {
-      color: isDark ? "#6ee7b7" : "#065f46",
-      fontWeight: "500",
-      textAlign: "center",
-    },
-    timestampText: {
-      fontSize: 12,
-      color: isDark ? "#94a3b8" : "#6b7280",
-      marginTop: 16,
-      textAlign: "right",
-    },
-    disclaimerText: {
-      fontSize: 12,
-      color: isDark ? "#94a3b8" : "#6b7280",
-      fontStyle: "italic",
-      textAlign: "center",
-      marginBottom: 16,
-    },
-    resetButton: {
-      backgroundColor: isDark ? "#8b5cf6" : "#8b5cf6",
+    primaryButton: {
+      marginTop: 14,
+      backgroundColor: colors.accent,
+      borderRadius: 12,
+      paddingVertical: 12,
       paddingHorizontal: 20,
-      paddingVertical: 10,
-      borderRadius: 8,
-      marginTop: 16,
+      alignItems: "center",
+      justifyContent: "center",
     },
-    resetButtonText: {
+    primaryButtonText: {
       color: "#ffffff",
-      fontWeight: "600",
-      fontSize: 16,
-    },
-    emptyContainer: {
-      alignItems: "center",
-      justifyContent: "center",
-      padding: 24,
-    },
-    emptyText: {
-      fontSize: 16,
-      color: isDark ? "#94a3b8" : "#6b7280",
-      textAlign: "center",
-      marginBottom: 16,
-    },
-    centerText: {
-      textAlign: "center",
-      padding: 16,
-      color: isDark ? "#f8fafc" : "#1e293b",
-    },
-    permissionContainer: {
-      flex: 1,
-      justifyContent: "center",
-      alignItems: "center",
-      padding: 16,
-      backgroundColor: isDark ? "#1e293b" : "#ffffff",
-    },
-    cameraPermissionContainer: {
-      flex: 1,
-      justifyContent: "center",
-      alignItems: "center",
-      padding: 16,
-      backgroundColor: isDark ? "#1e293b" : "#ffffff",
-    },
-    baseText: {
-      fontSize: 16,
-      color: isDark ? "#e2e8f0" : "#1e293b",
-    },
-    permissionButton: {
-      marginTop: 8,
-      color: isDark ? "#93c5fd" : "#3b82f6",
-      fontWeight: "500",
-    },
-    // Additional styles from your reference
-    safeArea: {
-      flex: 1,
-      backgroundColor: isDark ? "#0f172a" : "#f9fafb",
-    },
-    wrapper: {
-      flex: 1,
-    },
-    contentContainer: {
-      flexGrow: 1,
-      justifyContent: "space-between",
-      padding: 24,
-      backgroundColor: isDark ? "#0f172a" : "#f9fafb",
-    },
-    title: {
-      fontSize: 28,
       fontWeight: "700",
-      marginBottom: 16,
-      color: isDark ? "#f8fafc" : "#1e293b",
+      fontSize: 15,
     },
-    sectionTitle: {
-      fontSize: 18,
-      fontWeight: "600",
-      marginTop: 24,
-      marginBottom: 6,
-      color: isDark ? "#cbd5e1" : "#334155",
+    secondaryButton: {
+      marginTop: 12,
+      backgroundColor: colors.panelSoft,
+      borderRadius: 12,
+      borderColor: colors.border,
+      borderWidth: 1,
+      paddingVertical: 10,
+      alignItems: "center",
+      justifyContent: "center",
     },
-    paragraph: {
-      fontSize: 16,
-      lineHeight: 22,
-      color: isDark ? "#e2e8f0" : "#475569",
-    },
-    footer: {
+    secondaryButtonText: {
+      color: colors.text,
+      fontWeight: "700",
       fontSize: 14,
-      marginTop: 32,
-      paddingTop: 20,
-      borderTopWidth: 1,
-      borderTopColor: isDark ? "#1e293b" : "#e5e7eb",
-      textAlign: "center",
-      color: isDark ? "#94a3b8" : "#64748b",
     },
-    header: {
-      paddingTop: 20,
-      paddingBottom: 10,
-      paddingHorizontal: 16,
-      backgroundColor: isDark ? "#1e293b" : "#e5e7eb",
+    manualCard: {
+      backgroundColor: colors.panel,
+      borderRadius: 20,
+      borderColor: colors.border,
+      borderWidth: 1,
+      padding: 14,
+    },
+    manualTitle: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: "700",
+      marginBottom: 10,
+    },
+    manualRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    manualInput: {
+      flex: 1,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      color: colors.text,
+      backgroundColor: "rgba(255, 255, 255, 0.03)",
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      fontSize: 14,
+    },
+    manualButton: {
+      backgroundColor: colors.accentStrong,
+      borderRadius: 12,
+      paddingVertical: 11,
+      paddingHorizontal: 14,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    manualButtonText: {
+      color: "#ffffff",
+      fontWeight: "700",
+      fontSize: 13,
+    },
+    analyticsContent: {
+      paddingHorizontal: 20,
+      paddingTop: 10,
+      paddingBottom: 26,
+      gap: 14,
+    },
+    statsGrid: {
+      gap: 10,
+    },
+    statCard: {
+      backgroundColor: colors.panel,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 16,
+      padding: 14,
+    },
+    positiveCard: {
+      borderColor: `${colors.positive}88`,
+    },
+    negativeCard: {
+      borderColor: `${colors.negative}88`,
+    },
+    statLabel: {
+      color: colors.subtext,
+      fontSize: 13,
+      fontWeight: "600",
+    },
+    statValue: {
+      color: colors.text,
+      marginTop: 6,
+      fontSize: 28,
+      fontWeight: "800",
+      letterSpacing: 0.4,
+    },
+    latestCard: {
+      backgroundColor: colors.panel,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 16,
+      padding: 14,
+    },
+    latestTitle: {
+      color: colors.subtext,
+      fontSize: 13,
+      marginBottom: 6,
+    },
+    latestCountry: {
+      color: colors.text,
+      fontSize: 23,
+      fontWeight: "800",
+      marginBottom: 8,
+    },
+    latestMeta: {
+      color: colors.subtext,
+      fontSize: 13,
+      marginTop: 3,
+    },
+    latestTone: {
+      marginTop: 10,
+      fontWeight: "800",
+      fontSize: 14,
+    },
+    positiveTone: {
+      color: colors.positive,
+    },
+    negativeTone: {
+      color: colors.negative,
+    },
+    historySection: {
+      backgroundColor: colors.panel,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 16,
+      padding: 14,
+    },
+    historyHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 8,
+    },
+    historyTitle: {
+      color: colors.text,
+      fontWeight: "700",
+      fontSize: 15,
+    },
+    clearHistoryText: {
+      color: colors.accent,
+      fontWeight: "700",
+      fontSize: 13,
+    },
+    emptyStateCard: {
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.panelSoft,
+      paddingVertical: 20,
+      paddingHorizontal: 12,
+    },
+    emptyStateText: {
+      color: colors.subtext,
+      textAlign: "center",
+      fontSize: 13,
+    },
+    historyItem: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      backgroundColor: colors.panelSoft,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      marginTop: 8,
+    },
+    historyCountry: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: "700",
+    },
+    historyCode: {
+      color: colors.subtext,
+      fontSize: 12,
+      marginTop: 2,
+      maxWidth: 180,
+    },
+    historyRight: {
       alignItems: "flex-end",
     },
+    historyTone: {
+      fontSize: 12,
+      fontWeight: "800",
+    },
+    historyTime: {
+      marginTop: 3,
+      color: colors.subtext,
+      fontSize: 11,
+    },
+    centeredState: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: 24,
+    },
+    stateTitle: {
+      color: colors.text,
+      fontWeight: "800",
+      fontSize: 20,
+      textAlign: "center",
+    },
+    stateText: {
+      color: colors.subtext,
+      marginTop: 8,
+      fontSize: 14,
+      textAlign: "center",
+      lineHeight: 20,
+    },
   });
+};
 
 export default getStyles;

@@ -3,25 +3,31 @@ import React from "react";
 import { Stack } from "expo-router";
 import { Image } from "react-native";
 import {
-  View,
   Text,
   ScrollView,
-  SafeAreaView,
-  StatusBar,
+  View,
   useColorScheme,
 } from "react-native";
-import { getStyles } from "../../components/styles/styles-tab"; // import the styles
+import { StatusBar } from "expo-status-bar";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { getStyles } from "../../components/styles/styles-tab";
 
 export default function AboutUs() {
   const theme = useColorScheme();
   const isDark = theme === "dark";
-  const styles = getStyles(isDark); // Get styles dynamically based on theme
+  const styles = getStyles(isDark);
 
   return (
     <>
       <Stack.Screen
         options={{
           title: "About Us",
+          headerStyle: {
+            height: 52,
+          },
+          headerTitleStyle: {
+            fontSize: 17,
+          },
           headerRight: () => (
             <Image
               source={require("../../assets/images/icon.png")}
@@ -33,33 +39,39 @@ export default function AboutUs() {
         }}
       />
       <SafeAreaView style={styles.safeArea}>
-        <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
+        <StatusBar style="light" />
         <View style={styles.wrapper}>
           <ScrollView
+            style={styles.scrollView}
             contentContainerStyle={styles.contentContainer}
             showsVerticalScrollIndicator={false}
+            alwaysBounceVertical
           >
-            <View>
-              <Text style={styles.title}>Know Where It Comes From</Text>
+            <View style={styles.heroCard}>
+              <Text style={styles.title}>Know What You Buy</Text>
               <Text style={styles.paragraph}>
-                Scan any product's barcode to discover where it's registered.
+                Check any barcode fast and see where it is registered.
               </Text>
+            </View>
 
+            <View style={styles.sectionCard}>
               <Text style={styles.sectionTitle}>How It Works</Text>
               <Text style={styles.paragraph}>
-                Barcodes follow international standards. We decode them to
-                reveal the country of origin.
+                We read the GS1 prefix and map it to its country range.
               </Text>
+            </View>
 
-              <Text style={styles.sectionTitle}>Heads Up</Text>
+            <View style={styles.sectionCard}>
+              <Text style={styles.sectionTitle}>Important Context</Text>
               <Text style={styles.paragraph}>
-                A barcode’s origin ≠ where the product was made. It's where the
-                barcode is registered.
+                This is barcode registration, not always manufacturing origin.
               </Text>
+            </View>
 
-              <Text style={styles.sectionTitle}>Your Privacy</Text>
+            <View style={styles.sectionCard}>
+              <Text style={styles.sectionTitle}>Privacy First</Text>
               <Text style={styles.paragraph}>
-                Everything happens on your device. We collect nothing.
+                Scanning is on-device. Your data stays on your phone.
               </Text>
             </View>
 
