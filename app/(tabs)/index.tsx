@@ -9,9 +9,6 @@ export default function HomeScreen() {
       <Stack.Screen
         options={{
           title: "Solidarity",
-          headerStyle: {
-            height: 52,
-          },
           headerTitleStyle: {
             fontSize: 17,
           },

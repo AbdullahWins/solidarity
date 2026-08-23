@@ -1,126 +1,86 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import { CameraView, useCameraPermissions } from "expo-camera";
+import * as Haptics from "expo-haptics";
+import { StatusBar } from "expo-status-bar";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
-  useColorScheme,
 } from "react-native";
-import { CameraView, useCameraPermissions } from "expo-camera";
 import { useIsFocused } from "@react-navigation/native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { StatusBar } from "expo-status-bar";
 
-import { countryCodeMap } from "../constants/country-map";
-import { getStyles } from "../components/styles/styles-barcode";
-
-type ActiveTab = "search" | "scanner";
-
-type ScanRecord = {
-  id: string;
-  code: string;
-  country: string;
-  isPositive: boolean;
-  source: "camera" | "manual";
-  scannedAt: string;
-};
+import { Badge } from "../components/ui/Badge";
+import { Button } from "../components/ui/Button";
+import { Card } from "../components/ui/Card";
+import { ScreenContainer } from "../components/ui/ScreenContainer";
+import { colors, radius, spacing, typography } from "../constants/theme";
+import { badgeDefinitions } from "../lib/badges";
+import { useScanHistory } from "../hooks/useScanHistory";
+import { identifyCountry, isPositiveCountry } from "../lib/scan-logic";
+import type { ScanRecord } from "../lib/types";
 
 type BarcodeScanningResult = {
   data: string;
 };
 
-const identifyCountry = (barcode: string | null): string | null => {
-  if (!barcode || typeof barcode !== "string") return null;
-
-  const cleanBarcode = barcode.replace(/\D/g, "");
-  if (cleanBarcode.length < 3) return null;
-
-  const prefix = cleanBarcode.substring(0, 3);
-  const prefixNum = parseInt(prefix, 10);
-
-  if (countryCodeMap[prefix]) return countryCodeMap[prefix];
-
-  for (const key of Object.keys(countryCodeMap)) {
-    if (!key.includes("-")) continue;
-    const [min, max] = key.split("-").map(Number);
-    if (prefixNum >= min && prefixNum <= max) {
-      return countryCodeMap[key];
-    }
-  }
-
-  return null;
-};
-
-const isPositiveCountry = (country: string): boolean => {
-  const normalized = country.toLowerCase();
-  return (
-    normalized.includes("india") ||
-    normalized.includes("israel") ||
-    normalized.includes("usa") ||
-    normalized.includes("united states") ||
-    normalized.includes("america") ||
-    normalized.includes("canada")
-  );
-};
-
-const getCurrentDateTime = () =>
-  new Date().toISOString().replace("T", " ").substring(0, 19);
-
 export default function CustomBarcodeScanner() {
-  const isDark = useColorScheme() === "dark";
   const isFocused = useIsFocused();
-  const styles = getStyles(isDark);
+  const { addScan } = useScanHistory();
 
-  const [activeTab, setActiveTab] = useState<ActiveTab>("search");
-  const [manualCode, setManualCode] = useState<string>("");
-  const [cameraKey, setCameraKey] = useState<number>(0);
-  const [readyToScan, setReadyToScan] = useState<boolean>(true);
-  const [history, setHistory] = useState<ScanRecord[]>([]);
+  const [manualCode, setManualCode] = useState("");
+  const [cameraKey, setCameraKey] = useState(0);
+  const [readyToScan, setReadyToScan] = useState(true);
   const [latestRecord, setLatestRecord] = useState<ScanRecord | null>(null);
+  const [xpToast, setXpToast] = useState<{ xp: number; badgeIds: string[] } | null>(null);
 
   const [permission, requestPermission] = useCameraPermissions();
 
   useEffect(() => {
-    if (isFocused && activeTab === "search") {
+    if (isFocused) {
       setReadyToScan(true);
-      setCameraKey((value) => value + 1);
+      setCameraKey((v) => v + 1);
     }
-  }, [activeTab, isFocused]);
+  }, [isFocused]);
 
-  const stats = useMemo(() => {
-    const total = history.length;
-    const positive = history.filter((item) => item.isPositive).length;
-    const negative = total - positive;
-    return { total, positive, negative };
-  }, [history]);
+  useEffect(() => {
+    if (!xpToast) return;
+    const timeout = setTimeout(() => setXpToast(null), 3200);
+    return () => clearTimeout(timeout);
+  }, [xpToast]);
 
-  const addScanRecord = (barcode: string, source: "camera" | "manual") => {
+  const submitScan = async (barcode: string, source: "camera" | "manual") => {
     const country = identifyCountry(barcode) || "Unknown";
     const positive = isPositiveCountry(country);
 
-    const record: ScanRecord = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      code: barcode,
-      country,
-      isPositive: positive,
-      source,
-      scannedAt: getCurrentDateTime(),
-    };
+    const result = await addScan({ code: barcode, country, isPositive: positive, source });
 
-    setLatestRecord(record);
-    setHistory((current) => [record, ...current].slice(0, 60));
-    setActiveTab("scanner");
+    setLatestRecord(result.record);
+    setXpToast({
+      xp: result.gamification.xp,
+      badgeIds: result.newlyUnlockedBadgeIds,
+    });
+
+    Haptics.notificationAsync(
+      positive
+        ? Haptics.NotificationFeedbackType.Warning
+        : Haptics.NotificationFeedbackType.Success
+    ).catch(() => {});
+
+    setReadyToScan(false);
   };
 
   const handleBarCodeScanned = ({ data }: BarcodeScanningResult) => {
     if (!readyToScan) return;
-
     if (!data) {
       Alert.alert("Invalid Scan", "No barcode value was detected.");
       return;
     }
+    submitScan(data, "camera");
   };
 
   const handleManualSearch = () => {
@@ -129,232 +89,291 @@ export default function CustomBarcodeScanner() {
       Alert.alert("Missing Barcode", "Enter a barcode to continue.");
       return;
     }
-
-    addScanRecord(cleaned, "manual");
+    submitScan(cleaned, "manual");
     setManualCode("");
   };
 
   const prepareNextScan = () => {
-    setActiveTab("search");
     setReadyToScan(true);
-    setCameraKey((value) => value + 1);
-  };
-
-  const clearHistory = () => {
-    setHistory([]);
+    setCameraKey((v) => v + 1);
     setLatestRecord(null);
   };
 
   if (!permission) {
     return (
-      <SafeAreaView style={styles.screen}>
+      <ScreenContainer>
         <View style={styles.centeredState}>
           <Text style={styles.stateTitle}>Preparing camera</Text>
           <Text style={styles.stateText}>Checking permission status...</Text>
         </View>
-      </SafeAreaView>
+      </ScreenContainer>
     );
   }
 
   if (!permission.granted) {
     return (
-      <SafeAreaView style={styles.screen}>
+      <ScreenContainer>
         <View style={styles.centeredState}>
           <Text style={styles.stateTitle}>Camera permission required</Text>
           <Text style={styles.stateText}>
             Allow camera access to scan product barcodes.
           </Text>
-          <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={requestPermission}
-          >
-            <Text style={styles.primaryButtonText}>Grant Permission</Text>
-          </TouchableOpacity>
+          <Button label="Grant Permission" onPress={requestPermission} style={{ marginTop: spacing.lg }} />
         </View>
-      </SafeAreaView>
+      </ScreenContainer>
     );
   }
 
+  const newBadges = xpToast?.badgeIds
+    .map((id) => badgeDefinitions.find((b) => b.id === id))
+    .filter((b): b is NonNullable<typeof b> => !!b);
+
   return (
-    <SafeAreaView style={styles.screen} edges={["left", "right"]}>
+    <ScreenContainer>
       <StatusBar hidden />
-      <View style={styles.mainContent}>
-        {activeTab === "scanner" ? (
-          <ScrollView
-            contentContainerStyle={styles.searchContent}
-            showsVerticalScrollIndicator={false}
-          >
-          <View style={styles.cameraCard}>
-            <View style={styles.cameraFrame}>
-              {isFocused ? (
-                <CameraView
-                  key={`camera-${cameraKey}`}
-                  style={styles.camera}
-                  onBarcodeScanned={readyToScan ? handleBarCodeScanned : undefined}
-                  barcodeScannerSettings={{
-                    barcodeTypes: ["qr", "upc_e", "ean13", "ean8"],
-                  }}
-                />
-              ) : (
-                <View style={styles.camera} />
-              )}
-              <View pointerEvents="none" style={styles.scanGuideWrap}>
-                <View style={styles.scanGuideLine} />
-                <View style={[styles.scanEdgeMark, styles.scanEdgeMarkLeft]} />
-                <View style={[styles.scanEdgeMark, styles.scanEdgeMarkRight]} />
-              </View>
-            </View>
-
-            <Text style={styles.scanHintText}>
-              {readyToScan
-                ? "Point camera at a barcode"
-                : "Captured. Open Search tab to view analytics."}
-            </Text>
-
-            {!readyToScan && (
-              <TouchableOpacity
-                style={styles.secondaryButton}
-                onPress={prepareNextScan}
-              >
-                <Text style={styles.secondaryButtonText}>Scan Another</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          <View style={styles.manualCard}>
-            <Text style={styles.manualTitle}>Manual barcode lookup</Text>
-            <View style={styles.manualRow}>
-              <TextInput
-                style={styles.manualInput}
-                value={manualCode}
-                onChangeText={setManualCode}
-                placeholder="Enter barcode number"
-                placeholderTextColor={isDark ? "#94a3b8" : "#6b7280"}
-                keyboardType="number-pad"
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <Card style={styles.cameraCard}>
+          <View style={styles.cameraFrame}>
+            {isFocused ? (
+              <CameraView
+                key={`camera-${cameraKey}`}
+                style={styles.camera}
+                onBarcodeScanned={readyToScan ? handleBarCodeScanned : undefined}
+                barcodeScannerSettings={{
+                  barcodeTypes: ["qr", "upc_e", "ean13", "ean8"],
+                }}
               />
-              <TouchableOpacity
-                style={styles.manualButton}
-                onPress={handleManualSearch}
-              >
-                <Text style={styles.manualButtonText}>Analyze</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-          </ScrollView>
-        ) : (
-          <ScrollView
-            contentContainerStyle={styles.analyticsContent}
-            showsVerticalScrollIndicator={false}
-          >
-          <View style={styles.statsGrid}>
-            <View style={styles.statCard}>
-              <Text style={styles.statLabel}>Total scans</Text>
-              <Text style={styles.statValue}>{stats.total}</Text>
-            </View>
-            <View style={[styles.statCard, styles.positiveCard]}>
-              <Text style={styles.statLabel}>Positive scans</Text>
-              <Text style={styles.statValue}>{stats.positive}</Text>
-            </View>
-            <View style={[styles.statCard, styles.negativeCard]}>
-              <Text style={styles.statLabel}>Negative scans</Text>
-              <Text style={styles.statValue}>{stats.negative}</Text>
-            </View>
-          </View>
-
-          {latestRecord && (
-            <View style={styles.latestCard}>
-              <Text style={styles.latestTitle}>Latest result</Text>
-              <Text style={styles.latestCountry}>{latestRecord.country}</Text>
-              <Text style={styles.latestMeta}>Barcode: {latestRecord.code}</Text>
-              <Text style={styles.latestMeta}>Source: {latestRecord.source}</Text>
-              <Text
-                style={[
-                  styles.latestTone,
-                  latestRecord.isPositive
-                    ? styles.positiveTone
-                    : styles.negativeTone,
-                ]}
-              >
-                {latestRecord.isPositive ? "Positive" : "Negative"}
-              </Text>
-            </View>
-          )}
-
-          <View style={styles.historySection}>
-            <View style={styles.historyHeader}>
-              <Text style={styles.historyTitle}>Recent scans</Text>
-              <TouchableOpacity onPress={clearHistory}>
-                <Text style={styles.clearHistoryText}>Clear</Text>
-              </TouchableOpacity>
-            </View>
-
-            {history.length === 0 ? (
-              <View style={styles.emptyStateCard}>
-                <Text style={styles.emptyStateText}>
-                  No scans yet. Use Scanner tab to start scanning.
-                </Text>
-              </View>
             ) : (
-              history.map((item) => (
-                <View key={item.id} style={styles.historyItem}>
-                  <View>
-                    <Text style={styles.historyCountry}>{item.country}</Text>
-                    <Text style={styles.historyCode}>{item.code}</Text>
-                  </View>
-                  <View style={styles.historyRight}>
-                    <Text
-                      style={[
-                        styles.historyTone,
-                        item.isPositive ? styles.positiveTone : styles.negativeTone,
-                      ]}
-                    >
-                      {item.isPositive ? "Positive" : "Negative"}
-                    </Text>
-                    <Text style={styles.historyTime}>{item.scannedAt}</Text>
-                  </View>
-                </View>
-              ))
+              <View style={styles.camera} />
             )}
+            <View pointerEvents="none" style={styles.scanGuideWrap}>
+              <View style={styles.scanGuideLine} />
+              <View style={[styles.scanEdgeMark, styles.scanEdgeMarkLeft]} />
+              <View style={[styles.scanEdgeMark, styles.scanEdgeMarkRight]} />
+            </View>
           </View>
-          </ScrollView>
+
+          <Text style={styles.scanHintText}>
+            {readyToScan ? "Point camera at a barcode" : "Captured — check the result below."}
+          </Text>
+
+          {!readyToScan && (
+            <Button
+              label="Scan Another"
+              variant="secondary"
+              onPress={prepareNextScan}
+              style={{ marginTop: spacing.md }}
+            />
+          )}
+        </Card>
+
+        <Card style={styles.manualCard}>
+          <Text style={styles.manualTitle}>Manual barcode lookup</Text>
+          <View style={styles.manualRow}>
+            <TextInput
+              style={styles.manualInput}
+              value={manualCode}
+              onChangeText={setManualCode}
+              placeholder="Enter barcode number"
+              placeholderTextColor={colors.subtext}
+              keyboardType="number-pad"
+            />
+            <TouchableOpacity style={styles.manualButton} onPress={handleManualSearch}>
+              <Text style={styles.manualButtonText}>Analyze</Text>
+            </TouchableOpacity>
+          </View>
+        </Card>
+
+        {latestRecord && (
+          <Card tone={latestRecord.isPositive ? "positive" : "negative"}>
+            <Text style={styles.latestTitle}>Latest result</Text>
+            <Text style={styles.latestCountry}>{latestRecord.country}</Text>
+            <Text style={styles.latestMeta}>Barcode: {latestRecord.code}</Text>
+            <Text style={styles.latestMeta}>Source: {latestRecord.source}</Text>
+            <Text
+              style={[
+                styles.latestTone,
+                latestRecord.isPositive ? styles.positiveTone : styles.negativeTone,
+              ]}
+            >
+              {latestRecord.isPositive ? "Positive" : "Negative"}
+            </Text>
+          </Card>
         )}
-      </View>
 
-      <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[
-            styles.tabButton,
-            activeTab === "scanner" ? styles.tabButtonActive : undefined,
-          ]}
-          onPress={() => setActiveTab("scanner")}
-        >
-          <Text
-            style={[
-              styles.tabButtonText,
-              activeTab === "scanner" ? styles.tabButtonTextActive : undefined,
-            ]}
-          >
-            Scanner
-          </Text>
-        </TouchableOpacity>
+        {newBadges && newBadges.length > 0 && (
+          <View style={styles.badgeRow}>
+            {newBadges.map((badge) => (
+              <Badge key={badge.id} badge={badge} unlocked />
+            ))}
+          </View>
+        )}
+      </ScrollView>
 
-        <TouchableOpacity
-          style={[
-            styles.tabButton,
-            activeTab === "search" ? styles.tabButtonActive : undefined,
-          ]}
-          onPress={() => setActiveTab("search")}
-        >
-          <Text
-            style={[
-              styles.tabButtonText,
-              activeTab === "search" ? styles.tabButtonTextActive : undefined,
-            ]}
-          >
-            Search
+      {xpToast && (
+        <View style={styles.toast}>
+          <Ionicons name="flash" size={16} color={colors.gold} />
+          <Text style={styles.toastText}>
+            Total XP: {xpToast.xp}
+            {xpToast.badgeIds.length > 0 ? " · New badge unlocked!" : ""}
           </Text>
-        </TouchableOpacity>
-      </View>
-    </SafeAreaView>
+        </View>
+      )}
+    </ScreenContainer>
   );
 }
+
+const styles = StyleSheet.create({
+  content: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xxl,
+    gap: spacing.md,
+  },
+  cameraCard: {
+    padding: spacing.md,
+  },
+  cameraFrame: {
+    borderRadius: radius.lg,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: colors.border,
+    height: 132,
+    backgroundColor: "#000",
+  },
+  camera: {
+    width: "100%",
+    height: "100%",
+  },
+  scanGuideWrap: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  scanGuideLine: {
+    width: "78%",
+    height: 2,
+    backgroundColor: `${colors.accent}cc`,
+    borderRadius: radius.pill,
+  },
+  scanEdgeMark: {
+    position: "absolute",
+    width: 3,
+    height: "54%",
+    backgroundColor: `${colors.accent}cc`,
+    borderRadius: radius.pill,
+  },
+  scanEdgeMarkLeft: { left: "11%" },
+  scanEdgeMarkRight: { right: "11%" },
+  scanHintText: {
+    color: colors.subtext,
+    marginTop: spacing.md,
+    fontSize: 13,
+    textAlign: "center",
+  },
+  manualCard: {
+    padding: spacing.md,
+  },
+  manualTitle: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: "700",
+    marginBottom: spacing.sm,
+  },
+  manualRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  manualInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    color: colors.text,
+    backgroundColor: "rgba(255, 255, 255, 0.03)",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    fontSize: 14,
+  },
+  manualButton: {
+    backgroundColor: colors.accentStrong,
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm + 3,
+    paddingHorizontal: spacing.md + 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  manualButtonText: {
+    color: "#ffffff",
+    fontWeight: "700",
+    fontSize: 13,
+  },
+  latestTitle: {
+    color: colors.subtext,
+    fontSize: 13,
+    marginBottom: spacing.xs + 2,
+  },
+  latestCountry: {
+    color: colors.text,
+    fontSize: 23,
+    fontWeight: "800",
+    marginBottom: spacing.sm,
+  },
+  latestMeta: {
+    color: colors.subtext,
+    fontSize: 13,
+    marginTop: 3,
+  },
+  latestTone: {
+    marginTop: spacing.sm,
+    fontWeight: "800",
+    fontSize: 14,
+  },
+  positiveTone: { color: colors.positive },
+  negativeTone: { color: colors.negative },
+  badgeRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+  },
+  centeredState: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: spacing.xxl,
+  },
+  stateTitle: {
+    ...typography.title,
+    color: colors.text,
+    textAlign: "center",
+  },
+  stateText: {
+    color: colors.subtext,
+    marginTop: spacing.sm,
+    fontSize: 14,
+    textAlign: "center",
+    lineHeight: 20,
+  },
+  toast: {
+    position: "absolute",
+    bottom: spacing.xl,
+    left: spacing.xl,
+    right: spacing.xl,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.bgElevated,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.md,
+  },
+  toastText: {
+    color: colors.text,
+    fontSize: 12,
+    fontWeight: "700",
+    flexShrink: 1,
+  },
+});

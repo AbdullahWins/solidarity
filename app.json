@@ -50,6 +50,13 @@
             "enableSeparateBuilds": true
           }
         }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow $(PRODUCT_NAME) to save your shared stats image to your photos.",
+          "savePhotosPermission": "Allow $(PRODUCT_NAME) to save your shared stats image to your photos."
+        }
       ]
     ],
     "experiments": {
