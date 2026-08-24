@@ -18,8 +18,11 @@ import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { ScreenContainer } from "../components/ui/ScreenContainer";
+import { LevelUpModal } from "../components/gamification/LevelUpModal";
 import { colors, radius, spacing, typography } from "../constants/theme";
 import { badgeDefinitions } from "../lib/badges";
+import { hapticNotification } from "../lib/haptics";
+import { useCloudSync } from "../hooks/useCloudSync";
 import { useScanHistory } from "../hooks/useScanHistory";
 import { identifyCountry, isPositiveCountry } from "../lib/scan-logic";
 import type { ScanRecord } from "../lib/types";
@@ -30,13 +33,15 @@ type BarcodeScanningResult = {
 
 export default function CustomBarcodeScanner() {
   const isFocused = useIsFocused();
-  const { addScan } = useScanHistory();
+  const { scans, gamification, addScan } = useScanHistory();
+  useCloudSync(scans, gamification);
 
   const [manualCode, setManualCode] = useState("");
   const [cameraKey, setCameraKey] = useState(0);
   const [readyToScan, setReadyToScan] = useState(true);
   const [latestRecord, setLatestRecord] = useState<ScanRecord | null>(null);
   const [xpToast, setXpToast] = useState<{ xp: number; badgeIds: string[] } | null>(null);
+  const [levelUpModal, setLevelUpModal] = useState<{ level: number } | null>(null);
 
   const [permission, requestPermission] = useCameraPermissions();
 
@@ -65,11 +70,13 @@ export default function CustomBarcodeScanner() {
       badgeIds: result.newlyUnlockedBadgeIds,
     });
 
-    Haptics.notificationAsync(
-      positive
-        ? Haptics.NotificationFeedbackType.Warning
-        : Haptics.NotificationFeedbackType.Success
-    ).catch(() => {});
+    if (result.leveledUp) {
+      setLevelUpModal({ level: result.gamification.level });
+    }
+
+    hapticNotification(
+      positive ? Haptics.NotificationFeedbackType.Warning : Haptics.NotificationFeedbackType.Success
+    );
 
     setReadyToScan(false);
   };
@@ -219,6 +226,12 @@ export default function CustomBarcodeScanner() {
           </Text>
         </View>
       )}
+
+      <LevelUpModal
+        visible={!!levelUpModal}
+        level={levelUpModal?.level ?? 1}
+        onDismiss={() => setLevelUpModal(null)}
+      />
     </ScreenContainer>
   );
 }

@@ -1,11 +1,11 @@
 import React from "react";
-import { StyleSheet, View, ViewStyle } from "react-native";
+import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 
 import { colors, radius, shadow, spacing } from "../../constants/theme";
 
 type Props = {
   children: React.ReactNode;
-  style?: ViewStyle | ViewStyle[];
+  style?: StyleProp<ViewStyle>;
   tone?: "default" | "positive" | "negative";
   elevated?: boolean;
 };

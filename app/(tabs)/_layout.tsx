@@ -4,6 +4,8 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { colors } from "../../constants/theme";
 
+type IconProps = { color: string; focused: boolean };
+
 export default function TabLayout() {
   return (
     <Tabs
@@ -27,8 +29,8 @@ export default function TabLayout() {
         name="index"
         options={{
           title: "Scan",
-          tabBarIcon: ({ color }: { color: string }) => (
-            <Ionicons name="barcode" size={24} color={color} />
+          tabBarIcon: ({ color, focused }: IconProps) => (
+            <Ionicons name={focused ? "barcode" : "barcode-outline"} size={24} color={color} />
           ),
         }}
       />
@@ -36,8 +38,12 @@ export default function TabLayout() {
         name="stats"
         options={{
           title: "Stats",
-          tabBarIcon: ({ color }: { color: string }) => (
-            <Ionicons name="stats-chart" size={22} color={color} />
+          tabBarIcon: ({ color, focused }: IconProps) => (
+            <Ionicons
+              name={focused ? "stats-chart" : "stats-chart-outline"}
+              size={22}
+              color={color}
+            />
           ),
         }}
       />
@@ -45,17 +51,30 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: "Profile",
-          tabBarIcon: ({ color }: { color: string }) => (
-            <Ionicons name="trophy" size={22} color={color} />
+          tabBarIcon: ({ color, focused }: IconProps) => (
+            <Ionicons
+              name={focused ? "person-circle" : "person-circle-outline"}
+              size={24}
+              color={color}
+            />
           ),
         }}
       />
       <Tabs.Screen
-        name="about"
+        name="leaderboard"
         options={{
-          title: "About",
-          tabBarIcon: ({ color }: { color: string }) => (
-            <Ionicons name="information-circle-outline" size={24} color={color} />
+          title: "Leaderboard",
+          tabBarIcon: ({ color, focused }: IconProps) => (
+            <Ionicons name={focused ? "trophy" : "trophy-outline"} size={22} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: "Settings",
+          tabBarIcon: ({ color, focused }: IconProps) => (
+            <Ionicons name={focused ? "settings" : "settings-outline"} size={22} color={color} />
           ),
         }}
       />

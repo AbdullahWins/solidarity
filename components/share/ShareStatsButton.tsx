@@ -42,7 +42,7 @@ export function ShareStatsButton({ scans, gamification, stats }: Props) {
     if (saving) return;
     setSaving(true);
     try {
-      const permission = await MediaLibrary.requestPermissionsAsync();
+      const permission = await MediaLibrary.requestPermissionsAsync(true);
       if (!permission.granted) {
         Alert.alert("Permission needed", "Allow photo access to save your stats image.");
         return;

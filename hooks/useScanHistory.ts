@@ -58,8 +58,9 @@ export function useScanHistory() {
       const newlyUnlockedBadgeIds = nextGamification.unlockedBadgeIds.filter(
         (id) => !previousGamification.unlockedBadgeIds.includes(id)
       );
+      const leveledUp = nextGamification.level > previousGamification.level;
 
-      return { record, gamification: nextGamification, newlyUnlockedBadgeIds };
+      return { record, gamification: nextGamification, newlyUnlockedBadgeIds, leveledUp };
     },
     [gamification]
   );

@@ -1,0 +1,50 @@
+rules_version = '2';
+
+// Paste this into Firebase Console → Firestore Database → Rules → Publish.
+//
+// Data model: one document per signed-in user at users/{uid}, holding only
+// an aggregated gamification summary (xp, level, streaks, badges, daily scan
+// counts) — never raw scan/barcode data. See lib/cloudSync.ts.
+//
+// - Every user can read/write only their own document.
+// - Any signed-in user can read another user's document ONLY if that user
+//   opted into the public leaderboard (leaderboardOptIn == true) — this is
+//   what powers the leaderboard query in lib/cloudSync.ts (fetchLeaderboard).
+// - No one can read/write anything outside /users/{uid}.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      allow get: if request.auth != null &&
+                    (request.auth.uid == userId || resource.data.leaderboardOptIn == true);
+
+      // Needed for the leaderboard's collection query (where leaderboardOptIn == true,
+      // orderBy xp desc). Firestore rules can't filter individual documents out of a
+      // "list" result by field value, so any signed-in user can technically issue a
+      // raw query — this is an accepted trade-off given the doc only ever contains
+      // non-sensitive aggregated stats (no email, no raw scan history).
+      allow list: if request.auth != null;
+
+      // leaderboardOptIn may only be set to true when the account's email is
+      // verified (request.auth.token.email_verified comes from the ID token,
+      // refreshed via reload()+getIdToken(true) client-side before writing).
+      allow create: if request.auth != null
+                    && request.auth.uid == userId
+                    && request.resource.data.uid == userId
+                    && (request.resource.data.leaderboardOptIn == false
+                        || request.auth.token.email_verified == true);
+
+      allow update: if request.auth != null
+                    && request.auth.uid == userId
+                    && request.resource.data.uid == userId
+                    && (request.resource.data.leaderboardOptIn == false
+                        || request.auth.token.email_verified == true);
+
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Deny everything else by default.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

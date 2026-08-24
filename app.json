@@ -39,7 +39,9 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera."
+          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
         }
       ],
       [
@@ -55,9 +57,18 @@
         "expo-media-library",
         {
           "photosPermission": "Allow $(PRODUCT_NAME) to save your shared stats image to your photos.",
-          "savePhotosPermission": "Allow $(PRODUCT_NAME) to save your shared stats image to your photos."
+          "savePhotosPermission": "Allow $(PRODUCT_NAME) to save your shared stats image to your photos.",
+          "granularPermissions": []
         }
-      ]
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#60a5fa"
+        }
+      ],
+      "./plugins/withCleanPermissions.js"
     ],
     "experiments": {
       "typedRoutes": true

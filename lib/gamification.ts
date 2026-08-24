@@ -25,6 +25,16 @@ export const computeLevel = (xp: number): number => {
   return level;
 };
 
+export type RankTier = "Bronze" | "Silver" | "Gold" | "Platinum" | "Diamond";
+
+export const getRankTitle = (level: number): RankTier => {
+  if (level >= 35) return "Diamond";
+  if (level >= 20) return "Platinum";
+  if (level >= 10) return "Gold";
+  if (level >= 5) return "Silver";
+  return "Bronze";
+};
+
 export const levelProgress = (xp: number) => {
   const level = computeLevel(xp);
   const currentThreshold = xpForLevel(level);

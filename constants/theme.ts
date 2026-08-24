@@ -17,6 +17,12 @@ export const colors = {
   negativeStrong: "#ef4444",
   gold: "#fbbf24",
   goldStrong: "#f59e0b",
+
+  tierBronze: "#cd7f32",
+  tierSilver: "#c0c0c0",
+  tierGold: "#fbbf24",
+  tierPlatinum: "#7dd3fc",
+  tierDiamond: "#c4b5fd",
 } as const;
 
 export const spacing = {
