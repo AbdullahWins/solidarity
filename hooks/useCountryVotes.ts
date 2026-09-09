@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
+import { useCallback, useState } from "react";
 
 import { useAuth } from "../contexts/AuthContext";
 import {
@@ -6,6 +7,7 @@ import {
   getAllTallies,
   getCachedMyVotes,
   normalizeCountryKey,
+  retractVote as retractVoteRequest,
   verdictFromTally,
   type CountryTally,
   type VoteChoice,
@@ -14,7 +16,7 @@ import { awardVoteXp } from "../lib/voteGamification";
 import type { GamificationState, ScanRecord } from "../lib/types";
 
 export type CastVoteOutcome =
-  | { ok: true; isFirstVote: boolean; leveledUp: boolean; level: number; xp: number }
+  | { ok: true; retracted: boolean; isFirstVote: boolean; leveledUp: boolean; level: number; xp: number }
   | { ok: false; reason: "signed-out" | "unverified" | "error" };
 
 export function useCountryVotes(
@@ -27,13 +29,33 @@ export function useCountryVotes(
   const [myVotes, setMyVotes] = useState<Record<string, VoteChoice>>(getCachedMyVotes());
   const [loadingTallies, setLoadingTallies] = useState(true);
 
-  useEffect(() => {
-    (async () => {
-      const result = await getAllTallies();
-      setTallies(result);
-      setLoadingTallies(false);
-    })();
+  const reload = useCallback(async (force = false) => {
+    const result = await getAllTallies(force);
+    setTallies(result);
+    setMyVotes(getCachedMyVotes());
+    setLoadingTallies(false);
   }, []);
+
+  // Reload on every focus, not just mount — other screens (or this same
+  // screen's own castVote) may have updated the shared tally/myVotes caches
+  // in lib/votes.ts since this component last rendered, and expo-router
+  // keeps tab screens mounted across tab switches so a plain mount-only
+  // effect would never pick that up.
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        const result = await getAllTallies();
+        if (cancelled) return;
+        setTallies(result);
+        setMyVotes(getCachedMyVotes());
+        setLoadingTallies(false);
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [])
+  );
 
   const getTally = useCallback(
     (country: string): CountryTally | undefined => tallies[normalizeCountryKey(country)],
@@ -55,10 +77,34 @@ export function useCountryVotes(
       if (!user) return { ok: false, reason: "signed-out" };
       if (!emailVerified) return { ok: false, reason: "unverified" };
 
+      const key = normalizeCountryKey(country);
+
+      // Tapping your already-active choice again retracts it instead of
+      // re-casting the same vote — this is how users remove a vote entirely.
+      if (myVotes[key] === choice) {
+        const tally = await retractVoteRequest(user.uid, country);
+        if (!tally) return { ok: false, reason: "error" };
+
+        setTallies((current) => ({ ...current, [key]: tally }));
+        setMyVotes((current) => {
+          const next = { ...current };
+          delete next[key];
+          return next;
+        });
+
+        return {
+          ok: true,
+          retracted: true,
+          isFirstVote: false,
+          leveledUp: false,
+          level: gamification.level,
+          xp: gamification.xp,
+        };
+      }
+
       const result = await castVoteRequest(user.uid, country, choice);
       if (!result) return { ok: false, reason: "error" };
 
-      const key = normalizeCountryKey(country);
       setTallies((current) => ({ ...current, [key]: result.tally }));
       setMyVotes((current) => ({ ...current, [key]: choice }));
 
@@ -73,14 +119,15 @@ export function useCountryVotes(
 
       return {
         ok: true,
+        retracted: false,
         isFirstVote: result.isFirstVote,
         leveledUp,
         level: nextGamification.level,
         xp: nextGamification.xp,
       };
     },
-    [user, emailVerified, gamification, scans, onGamificationChange]
+    [user, emailVerified, gamification, scans, onGamificationChange, myVotes]
   );
 
-  return { tallies, loadingTallies, getTally, getVerdict, myVote, castVote };
+  return { tallies, loadingTallies, getTally, getVerdict, myVote, castVote, reload };
 }

@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useState } from "react";
-import { Alert, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { Alert, RefreshControl, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 
 import { ShareStatsButton } from "../../components/share/ShareStatsButton";
 import { RankTitle } from "../../components/gamification/RankTitle";
@@ -20,7 +20,7 @@ import { badgeDefinitions } from "../../lib/badges";
 import { levelProgress } from "../../lib/gamification";
 
 export default function ProfileScreen() {
-  const { scans, gamification, stats } = useScanHistory();
+  const { scans, gamification, stats, reload } = useScanHistory();
   const {
     user,
     emailVerified,
@@ -30,13 +30,18 @@ export default function ProfileScreen() {
     resendVerificationEmail,
     refreshVerificationStatus,
   } = useAuth();
-  const { mergeNotice, leaderboardOptIn, setOptIn, displayGamification } = useCloudSync(
-    scans,
-    gamification
-  );
+  const { mergeNotice, leaderboardOptIn, setOptIn, displayGamification, refreshCloud } =
+    useCloudSync(scans, gamification);
   const [deleting, setDeleting] = useState(false);
   const [sendingVerification, setSendingVerification] = useState(false);
   const [checkingVerification, setCheckingVerification] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([reload(), refreshCloud()]);
+    setRefreshing(false);
+  };
 
   const effectiveXp = displayGamification?.xp ?? gamification.xp;
   const effectiveStreak = displayGamification?.currentStreak ?? gamification.currentStreak;
@@ -88,7 +93,13 @@ export default function ProfileScreen() {
       <Stack.Screen options={{ title: "Profile" }} />
       <ScreenContainer>
         <StatusBar style="light" />
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.text} />
+          }
+        >
           <Card style={styles.levelCard}>
             <View style={styles.levelHeader}>
               <Text style={styles.levelValue}>Level {level}</Text>

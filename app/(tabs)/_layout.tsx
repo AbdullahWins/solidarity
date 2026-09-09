@@ -48,15 +48,11 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="profile"
+        name="leaderboard"
         options={{
-          title: "Profile",
+          title: "Leaderboard",
           tabBarIcon: ({ color, focused }: IconProps) => (
-            <Ionicons
-              name={focused ? "person-circle" : "person-circle-outline"}
-              size={24}
-              color={color}
-            />
+            <Ionicons name={focused ? "trophy" : "trophy-outline"} size={22} color={color} />
           ),
         }}
       />
@@ -70,11 +66,15 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="leaderboard"
+        name="profile"
         options={{
-          title: "Leaderboard",
+          title: "Profile",
           tabBarIcon: ({ color, focused }: IconProps) => (
-            <Ionicons name={focused ? "trophy" : "trophy-outline"} size={22} color={color} />
+            <Ionicons
+              name={focused ? "person-circle" : "person-circle-outline"}
+              size={24}
+              color={color}
+            />
           ),
         }}
       />

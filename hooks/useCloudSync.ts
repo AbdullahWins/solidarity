@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState } from "react-native";
 
 import {
@@ -20,26 +20,28 @@ export function useCloudSync(scans: ScanRecord[], gamification: GamificationStat
   const [leaderboardOptIn, setLeaderboardOptIn] = useState(false);
   const hasPulledForUid = useRef<string | null>(null);
 
+  const pullCloudSummary = useCallback(async () => {
+    if (!user) return;
+    const cloud = await pullSummary(user.uid);
+    if (!cloud) return;
+
+    setCloudSummary(cloud);
+    setLeaderboardOptIn(cloud.leaderboardOptIn ?? false);
+    void mergeMyVotesFromCloud(cloud.myVotes);
+
+    if (cloud.xp > gamification.xp) {
+      setMergeNotice(
+        `Cloud backup has more progress (Level ${cloud.level}, ${cloud.xp} XP) than this device. Showing cloud stats until you scan again here.`
+      );
+    }
+  }, [user, gamification.xp]);
+
   // Pull cloud state once per sign-in and decide whether to surface it.
   useEffect(() => {
     if (!user || hasPulledForUid.current === user.uid) return;
     hasPulledForUid.current = user.uid;
-
-    (async () => {
-      const cloud = await pullSummary(user.uid);
-      if (!cloud) return;
-
-      setCloudSummary(cloud);
-      setLeaderboardOptIn(cloud.leaderboardOptIn ?? false);
-      void mergeMyVotesFromCloud(cloud.myVotes);
-
-      if (cloud.xp > gamification.xp) {
-        setMergeNotice(
-          `Cloud backup has more progress (Level ${cloud.level}, ${cloud.xp} XP) than this device. Showing cloud stats until you scan again here.`
-        );
-      }
-    })();
-  }, [user, gamification.xp]);
+    void pullCloudSummary();
+  }, [user, pullCloudSummary]);
 
   // Push a debounced update whenever local scan-derived state changes.
   useEffect(() => {
@@ -72,7 +74,11 @@ export function useCloudSync(scans: ScanRecord[], gamification: GamificationStat
     const effectiveValue = value && emailVerified;
     setLeaderboardOptIn(effectiveValue);
     if (!user) return;
-    markDirty(async () => {
+    // Deliberate, infrequent, user-initiated toggle — push immediately
+    // rather than going through markDirty's 5-minute debounce (which exists
+    // to guard the passive scan-driven sync path, not settings changes the
+    // user is actively waiting to see take effect).
+    (async () => {
       const summary = toCloudSummary(
         user.uid,
         user.displayName ?? "Scanner",
@@ -82,7 +88,7 @@ export function useCloudSync(scans: ScanRecord[], gamification: GamificationStat
       );
       await pushSummary(summary);
       setCloudSummary(summary);
-    });
+    })();
   };
 
   const displayGamification =
@@ -95,5 +101,12 @@ export function useCloudSync(scans: ScanRecord[], gamification: GamificationStat
         }
       : null;
 
-  return { cloudSummary, mergeNotice, leaderboardOptIn, setOptIn, displayGamification };
+  return {
+    cloudSummary,
+    mergeNotice,
+    leaderboardOptIn,
+    setOptIn,
+    displayGamification,
+    refreshCloud: pullCloudSummary,
+  };
 }

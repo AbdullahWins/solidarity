@@ -1,6 +1,6 @@
 import { Stack } from "expo-router";
-import React from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { useState } from "react";
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 
 import { ShareStatsButton } from "../../components/share/ShareStatsButton";
@@ -15,15 +15,28 @@ import { useScanHistory } from "../../hooks/useScanHistory";
 import { buildDailyCounts } from "../../lib/gamification";
 
 export default function StatsScreen() {
-  const { scans, stats, gamification, clearHistory } = useScanHistory();
+  const { scans, stats, gamification, reload } = useScanHistory();
   const dailyCounts = buildDailyCounts(scans);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await reload();
+    setRefreshing(false);
+  };
 
   return (
     <>
       <Stack.Screen options={{ title: "Stats" }} />
       <ScreenContainer>
         <StatusBar style="light" />
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.text} />
+          }
+        >
           <Card>
             <SectionHeader title="Daily activity" />
             <ContributionGraph dailyCounts={dailyCounts} />
@@ -45,11 +58,7 @@ export default function StatsScreen() {
           )}
 
           <Card>
-            <SectionHeader
-              title="Recent scans"
-              actionLabel={scans.length > 0 ? "Clear" : undefined}
-              onAction={clearHistory}
-            />
+            <SectionHeader title="Recent scans" />
             {scans.length === 0 ? (
               <EmptyState text="No scans yet. Use the Scan tab to get started." />
             ) : (

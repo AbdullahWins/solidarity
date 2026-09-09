@@ -6,6 +6,7 @@ import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useState } from "react";
 import {
   Alert,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -37,9 +38,9 @@ type BarcodeScanningResult = {
 
 export default function CustomBarcodeScanner() {
   const isFocused = useIsFocused();
-  const { scans, gamification, addScan, applyGamificationState } = useScanHistory();
+  const { scans, gamification, addScan, applyGamificationState, reload } = useScanHistory();
   useCloudSync(scans, gamification);
-  const { getTally, getVerdict, myVote, castVote } = useCountryVotes(
+  const { getTally, getVerdict, myVote, castVote, reload: reloadVotes } = useCountryVotes(
     scans,
     gamification,
     applyGamificationState
@@ -51,6 +52,13 @@ export default function CustomBarcodeScanner() {
   const [latestRecord, setLatestRecord] = useState<ScanRecord | null>(null);
   const [xpToast, setXpToast] = useState<{ xp: number; badgeIds: string[] } | null>(null);
   const [levelUpModal, setLevelUpModal] = useState<{ level: number } | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([reload(), reloadVotes(true)]);
+    setRefreshing(false);
+  };
 
   const [permission, requestPermission] = useCameraPermissions();
 
@@ -168,7 +176,13 @@ export default function CustomBarcodeScanner() {
   return (
     <ScreenContainer>
       <StatusBar hidden />
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.text} />
+        }
+      >
         <Card style={styles.cameraCard}>
           <View style={styles.cameraFrame}>
             {isFocused ? (
@@ -221,44 +235,45 @@ export default function CustomBarcodeScanner() {
           </View>
         </Card>
 
-        {latestRecord && (
-          <Card
-            tone={
-              isVotableCountry(latestRecord.country)
-                ? latestRecord.isPositive
-                  ? "positive"
-                  : "negative"
-                : "default"
-            }
-          >
-            <Text style={styles.latestTitle}>Latest result</Text>
-            <Text style={styles.latestCountry}>{latestRecord.country}</Text>
-            <Text style={styles.latestMeta}>Barcode: {latestRecord.code}</Text>
-            <Text style={styles.latestMeta}>Source: {latestRecord.source}</Text>
+        {latestRecord && (() => {
+          const votable = isVotableCountry(latestRecord.country);
+          // Live verdict, not the frozen scan-time snapshot — this card sits
+          // right above the vote buttons, so it must track any vote the user
+          // just cast instead of showing a stale "Positive"/"Negative" label
+          // that visually contradicts their own just-cast vote.
+          const liveVerdict = votable ? getVerdict(latestRecord.country) : null;
 
-            {isVotableCountry(latestRecord.country) ? (
-              <>
-                <Text
-                  style={[
-                    styles.latestTone,
-                    latestRecord.isPositive ? styles.positiveTone : styles.negativeTone,
-                  ]}
-                >
-                  {latestRecord.isPositive ? "Community: Positive" : "Community: Negative"}
-                </Text>
-                <View style={{ marginTop: spacing.sm }}>
-                  <VoteButtons
-                    tally={getTally(latestRecord.country)}
-                    myChoice={myVote(latestRecord.country)}
-                    onPress={(choice) => handleVote(latestRecord.country, choice)}
-                  />
-                </View>
-              </>
-            ) : (
-              <Text style={styles.latestMeta}>Not a votable country/region.</Text>
-            )}
-          </Card>
-        )}
+          return (
+            <Card tone={votable ? (liveVerdict ? "positive" : "negative") : "default"}>
+              <Text style={styles.latestTitle}>Latest result</Text>
+              <Text style={styles.latestCountry}>{latestRecord.country}</Text>
+              <Text style={styles.latestMeta}>Barcode: {latestRecord.code}</Text>
+              <Text style={styles.latestMeta}>Source: {latestRecord.source}</Text>
+
+              {votable ? (
+                <>
+                  <Text
+                    style={[
+                      styles.latestTone,
+                      liveVerdict ? styles.positiveTone : styles.negativeTone,
+                    ]}
+                  >
+                    {liveVerdict ? "Community: Positive" : "Community: Negative"}
+                  </Text>
+                  <View style={{ marginTop: spacing.sm }}>
+                    <VoteButtons
+                      tally={getTally(latestRecord.country)}
+                      myChoice={myVote(latestRecord.country)}
+                      onPress={(choice) => handleVote(latestRecord.country, choice)}
+                    />
+                  </View>
+                </>
+              ) : (
+                <Text style={styles.latestMeta}>Not a votable country/region.</Text>
+              )}
+            </Card>
+          );
+        })()}
 
         {newBadges && newBadges.length > 0 && (
           <View style={styles.badgeRow}>

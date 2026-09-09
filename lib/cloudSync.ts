@@ -115,7 +115,12 @@ export async function fetchLeaderboard(topN = 100): Promise<CloudUserSummary[]> 
     );
     const snap = await getDocs(q);
     return snap.docs.map((d) => d.data() as CloudUserSummary);
-  } catch {
+  } catch (err) {
+    // Diagnostic only — a missing Firestore composite index (common on
+    // first use of this exact where+orderBy combo) throws an error whose
+    // message includes a one-click link to create it; that's easy to miss
+    // if this is swallowed completely.
+    console.warn("fetchLeaderboard failed:", err);
     return [];
   }
 }

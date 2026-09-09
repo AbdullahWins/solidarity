@@ -65,13 +65,15 @@ service cloud.firestore {
     // Per-user, per-country vote record — only that user may read/write
     // their own vote; requires a verified email, matching the tally rule
     // above so the two writes in the client transaction are governed by
-    // the same auth precondition.
+    // the same auth precondition. "none" is a retraction tombstone (see
+    // lib/votes.ts retractVote) — the doc is never deleted so a user can't
+    // farm first-vote XP by retracting and re-voting on the same country.
     match /countryVotes/{countryKey}/voters/{uid} {
       allow read: if request.auth != null && request.auth.uid == uid;
       allow create, update: if request.auth != null
                     && request.auth.uid == uid
                     && request.auth.token.email_verified == true
-                    && request.resource.data.choice in ["up", "down"]
+                    && request.resource.data.choice in ["up", "down", "none"]
                     && request.resource.data.keys().hasOnly(["choice", "updatedAt"]);
       allow delete: if false;
     }

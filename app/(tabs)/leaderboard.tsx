@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { Card } from "../../components/ui/Card";
@@ -13,7 +14,7 @@ import { fetchLeaderboard, type CloudUserSummary } from "../../lib/cloudSync";
 import { getRankTitle } from "../../lib/gamification";
 
 export default function LeaderboardScreen() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [entries, setEntries] = useState<CloudUserSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -23,13 +24,28 @@ export default function LeaderboardScreen() {
     setEntries(data);
   }, []);
 
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      await load();
-      setLoading(false);
-    })();
-  }, [load]);
+  // Refetch on every focus (not just mount) — e.g. after opting in from
+  // Profile, or after the required Firestore index finishes building.
+  // Also wait for auth to finish restoring first: querying before the
+  // persisted session rehydrates sends the request unauthenticated, which
+  // the security rules correctly reject as "missing or insufficient
+  // permissions" — that's not a real failure, just a timing race.
+  useFocusEffect(
+    useCallback(() => {
+      if (authLoading) return;
+      let cancelled = false;
+      (async () => {
+        setLoading(true);
+        const data = await fetchLeaderboard(100);
+        if (cancelled) return;
+        setEntries(data);
+        setLoading(false);
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [authLoading])
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);

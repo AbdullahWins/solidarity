@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
+import { useCallback, useMemo, useState } from "react";
 
 import { computeGamificationState, computeScanStats } from "../lib/gamification";
 import {
   addScan as persistScan,
-  clearGamificationState,
   clearScans,
   generateScanId,
   getGamificationState,
@@ -19,17 +19,39 @@ export function useScanHistory() {
   );
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    (async () => {
-      const [storedScans, storedGamification] = await Promise.all([
-        getScans(),
-        getGamificationState(),
-      ]);
-      setScans(storedScans);
-      setGamification(storedGamification);
-      setLoading(false);
-    })();
+  const reload = useCallback(async () => {
+    const [storedScans, storedGamification] = await Promise.all([
+      getScans(),
+      getGamificationState(),
+    ]);
+    setScans(storedScans);
+    setGamification(storedGamification);
+    setLoading(false);
   }, []);
+
+  // Reload on every focus, not just mount — expo-router keeps tab screens
+  // mounted after their first visit, so a screen you were already on
+  // wouldn't otherwise see scans/gamification changes made from another tab
+  // (e.g. voting XP applied while on the Community tab, or a scan taken
+  // after Stats was already mounted).
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        const [storedScans, storedGamification] = await Promise.all([
+          getScans(),
+          getGamificationState(),
+        ]);
+        if (cancelled) return;
+        setScans(storedScans);
+        setGamification(storedGamification);
+        setLoading(false);
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [])
+  );
 
   const addScan = useCallback(
     async (input: {
@@ -67,10 +89,16 @@ export function useScanHistory() {
 
   const clearHistory = useCallback(async () => {
     await clearScans();
-    await clearGamificationState();
+    // Recompute (don't hard-reset) gamification: computeGamificationState
+    // carries voteXp/voteCount forward from the previous state, so clearing
+    // your scan history correctly zeroes out scan-derived XP/streaks/badges
+    // without also erasing XP and badges you earned from voting, which has
+    // nothing to do with scans.
+    const nextGamification = computeGamificationState([], gamification);
+    await saveGamificationState(nextGamification);
     setScans([]);
-    setGamification(DEFAULT_GAMIFICATION_STATE);
-  }, []);
+    setGamification(nextGamification);
+  }, [gamification]);
 
   const stats = useMemo(() => computeScanStats(scans), [scans]);
 
@@ -90,5 +118,6 @@ export function useScanHistory() {
     clearHistory,
     loading,
     applyGamificationState,
+    reload,
   };
 }
