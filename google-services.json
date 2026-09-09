@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1065144728938",
+    "project_id": "solidarity-nadesoft",
+    "storage_bucket": "solidarity-nadesoft.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1065144728938:android:e26aade5ecf0a57b457913",
+        "android_client_info": {
+          "package_name": "com.abdullahwins.solidarity"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDQCcThXHmmImlCv9gpV6TweN4cEXFREUI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
