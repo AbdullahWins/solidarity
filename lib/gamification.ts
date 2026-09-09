@@ -86,7 +86,7 @@ const computeStreaks = (dailyCounts: Record<string, number>) => {
   return { currentStreak, longestStreak };
 };
 
-const XP_PER_SCAN = 10;
+export const XP_PER_SCAN = 10;
 const XP_NEW_DAY_BONUS = 15;
 const DUPLICATE_WINDOW_MS = 60_000;
 
@@ -120,29 +120,14 @@ export const computeXp = (scans: ScanRecord[]): number => {
   return xp;
 };
 
-export function computeGamificationState(
+// Shared by computeGamificationState (scan-driven) and awardVoteXp
+// (vote-driven) so badge unlocks stay consistent regardless of which path
+// triggered the recompute, and prior unlock timestamps are always preserved.
+export function evaluateBadges(
   scans: ScanRecord[],
-  previousState: GamificationState = DEFAULT_GAMIFICATION_STATE
-): GamificationState {
-  if (scans.length === 0) {
-    return DEFAULT_GAMIFICATION_STATE;
-  }
-
-  const dailyCounts = buildDailyCounts(scans);
-  const { currentStreak, longestStreak } = computeStreaks(dailyCounts);
-  const xp = computeXp(scans);
-  const level = computeLevel(xp);
-
-  const partialState: GamificationState = {
-    xp,
-    level,
-    currentStreak,
-    longestStreak,
-    lastScanLocalDate: getLocalDateString(scans[0].scannedAt),
-    unlockedBadgeIds: [],
-    badgeUnlockedAt: {},
-  };
-
+  partialState: GamificationState,
+  previousState: GamificationState
+): Pick<GamificationState, "unlockedBadgeIds" | "badgeUnlockedAt"> {
   const unlockedBadgeIds: string[] = [];
   const badgeUnlockedAt: Record<string, string> = {};
   const nowIso = new Date().toISOString();
@@ -154,11 +139,47 @@ export function computeGamificationState(
     }
   }
 
-  return {
-    ...partialState,
-    unlockedBadgeIds,
-    badgeUnlockedAt,
+  return { unlockedBadgeIds, badgeUnlockedAt };
+}
+
+export function computeGamificationState(
+  scans: ScanRecord[],
+  previousState: GamificationState = DEFAULT_GAMIFICATION_STATE
+): GamificationState {
+  // Vote XP/count are earned via a separate flow (lib/voteGamification.ts) and
+  // aren't derivable from scans, so they must be carried forward on every
+  // recompute here or a subsequent scan would silently wipe them out.
+  const { voteXp, voteCount } = previousState;
+
+  if (scans.length === 0) {
+    const partialState: GamificationState = {
+      ...DEFAULT_GAMIFICATION_STATE,
+      xp: voteXp,
+      level: computeLevel(voteXp),
+      voteXp,
+      voteCount,
+    };
+    return { ...partialState, ...evaluateBadges(scans, partialState, previousState) };
+  }
+
+  const dailyCounts = buildDailyCounts(scans);
+  const { currentStreak, longestStreak } = computeStreaks(dailyCounts);
+  const xp = computeXp(scans) + voteXp;
+  const level = computeLevel(xp);
+
+  const partialState: GamificationState = {
+    xp,
+    level,
+    currentStreak,
+    longestStreak,
+    lastScanLocalDate: getLocalDateString(scans[0].scannedAt),
+    unlockedBadgeIds: [],
+    badgeUnlockedAt: {},
+    voteXp,
+    voteCount,
   };
+
+  return { ...partialState, ...evaluateBadges(scans, partialState, previousState) };
 }
 
 export function computeScanStats(scans: ScanRecord[]) {

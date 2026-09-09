@@ -74,5 +74,21 @@ export function useScanHistory() {
 
   const stats = useMemo(() => computeScanStats(scans), [scans]);
 
-  return { scans, gamification, stats, addScan, clearHistory, loading };
+  // Exposed so external flows that mutate GamificationState directly (e.g.
+  // vote-driven XP in lib/voteGamification.ts, which persists via
+  // saveGamificationState itself) can keep this hook's React state in sync
+  // without re-deriving it from scans.
+  const applyGamificationState = useCallback((next: GamificationState) => {
+    setGamification(next);
+  }, []);
+
+  return {
+    scans,
+    gamification,
+    stats,
+    addScan,
+    clearHistory,
+    loading,
+    applyGamificationState,
+  };
 }

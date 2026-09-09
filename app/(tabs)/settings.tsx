@@ -131,6 +131,14 @@ export default function SettingsScreen() {
             <Text style={styles.paragraph}>
               This is barcode registration, not always manufacturing origin.
             </Text>
+            <Text style={[styles.sectionTitle, { marginTop: spacing.md }]}>
+              Community-Driven Ratings
+            </Text>
+            <Text style={styles.paragraph}>
+              A country&apos;s color is decided by open voting from the Solidarity community —
+              never asserted by us. Anyone can see the vote counts; verified members can
+              vote or change their vote at any time from the Community tab.
+            </Text>
             <Text style={[styles.sectionTitle, { marginTop: spacing.md }]}>Privacy First</Text>
             <Text style={styles.paragraph}>
               Scanning always happens on-device. If you optionally create an account, we

@@ -15,6 +15,7 @@ import {
 import { db, isFirebaseConfigured } from "./firebase";
 import { buildDailyCounts, computeScanStats } from "./gamification";
 import type { GamificationState, ScanRecord } from "./types";
+import { getCachedMyVotes, type VoteChoice } from "./votes";
 
 export type CloudUserSummary = {
   uid: string;
@@ -30,6 +31,9 @@ export type CloudUserSummary = {
   dailyCounts: Record<string, number>;
   unlockedBadgeIds: string[];
   badgeUnlockedAt: Record<string, string>;
+  voteXp: number;
+  voteCount: number;
+  myVotes: Record<string, VoteChoice>;
   updatedAt?: Timestamp;
   schemaVersion: 1;
 };
@@ -70,6 +74,9 @@ export function toCloudSummary(
     dailyCounts: pruneDailyCounts(buildDailyCounts(scans)),
     unlockedBadgeIds: gamification.unlockedBadgeIds,
     badgeUnlockedAt: gamification.badgeUnlockedAt,
+    voteXp: gamification.voteXp,
+    voteCount: gamification.voteCount,
+    myVotes: getCachedMyVotes(),
     schemaVersion: 1,
   };
 }

@@ -15,6 +15,8 @@ export type GamificationState = {
   lastScanLocalDate: string | null; // "YYYY-MM-DD" device-local
   unlockedBadgeIds: string[];
   badgeUnlockedAt: Record<string, string>;
+  voteXp: number; // XP earned from casting first-time country votes (parallel to scan XP)
+  voteCount: number; // distinct countries voted on
 };
 
 export const DEFAULT_GAMIFICATION_STATE: GamificationState = {
@@ -25,4 +27,6 @@ export const DEFAULT_GAMIFICATION_STATE: GamificationState = {
   lastScanLocalDate: null,
   unlockedBadgeIds: [],
   badgeUnlockedAt: {},
+  voteXp: 0,
+  voteCount: 0,
 };

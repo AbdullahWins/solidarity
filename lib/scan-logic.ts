@@ -21,15 +21,3 @@ export const identifyCountry = (barcode: string | null): string | null => {
 
   return null;
 };
-
-export const isPositiveCountry = (country: string): boolean => {
-  const normalized = country.toLowerCase();
-  return (
-    normalized.includes("india") ||
-    normalized.includes("israel") ||
-    normalized.includes("usa") ||
-    normalized.includes("united states") ||
-    normalized.includes("america") ||
-    normalized.includes("canada")
-  );
-};

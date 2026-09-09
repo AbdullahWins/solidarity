@@ -133,4 +133,18 @@ export const badgeDefinitions: BadgeDefinition[] = [
     icon: "star",
     check: (_scans, state) => state.level >= 25,
   },
+  {
+    id: "votes_10",
+    name: "Community Voice",
+    description: "Cast votes on 10 countries.",
+    icon: "people",
+    check: (_scans, state) => state.voteCount >= 10,
+  },
+  {
+    id: "votes_50",
+    name: "Community Pillar",
+    description: "Cast votes on 50 countries.",
+    icon: "people-circle",
+    check: (_scans, state) => state.voteCount >= 50,
+  },
 ];

@@ -42,6 +42,40 @@ service cloud.firestore {
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
+    // Public, always-visible community vote tallies (one doc per country,
+    // ~80 total, never grows) — anyone (signed in or not) may read; only
+    // casting a vote (via the client's runTransaction in lib/votes.ts, which
+    // updates both this doc and the voter's own record together) can mutate
+    // it, and only by a signed-in + email-verified user.
+    match /countryTallies/{countryKey} {
+      allow read: if true;
+
+      allow create, update: if request.auth != null
+                    && request.auth.token.email_verified == true
+                    && request.resource.data.country is string
+                    && request.resource.data.upvotes is int
+                    && request.resource.data.downvotes is int
+                    && request.resource.data.upvotes >= 0
+                    && request.resource.data.downvotes >= 0
+                    && request.resource.data.keys().hasOnly(["country", "upvotes", "downvotes", "updatedAt"]);
+
+      allow delete: if false;
+    }
+
+    // Per-user, per-country vote record — only that user may read/write
+    // their own vote; requires a verified email, matching the tally rule
+    // above so the two writes in the client transaction are governed by
+    // the same auth precondition.
+    match /countryVotes/{countryKey}/voters/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null
+                    && request.auth.uid == uid
+                    && request.auth.token.email_verified == true
+                    && request.resource.data.choice in ["up", "down"]
+                    && request.resource.data.keys().hasOnly(["choice", "updatedAt"]);
+      allow delete: if false;
+    }
+
     // Deny everything else by default.
     match /{document=**} {
       allow read, write: if false;

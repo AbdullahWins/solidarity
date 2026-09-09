@@ -11,6 +11,7 @@ import {
 } from "../lib/cloudSync";
 import { useAuth } from "../contexts/AuthContext";
 import type { GamificationState, ScanRecord } from "../lib/types";
+import { mergeMyVotesFromCloud } from "../lib/votes";
 
 export function useCloudSync(scans: ScanRecord[], gamification: GamificationState) {
   const { user, isFirebaseConfigured, emailVerified } = useAuth();
@@ -30,6 +31,7 @@ export function useCloudSync(scans: ScanRecord[], gamification: GamificationStat
 
       setCloudSummary(cloud);
       setLeaderboardOptIn(cloud.leaderboardOptIn ?? false);
+      void mergeMyVotesFromCloud(cloud.myVotes);
 
       if (cloud.xp > gamification.xp) {
         setMergeNotice(

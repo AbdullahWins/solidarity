@@ -9,6 +9,7 @@ import 'react-native-reanimated';
 import { colors } from '@/constants/theme';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { getPreferences } from '@/lib/preferences';
+import { loadMyVotes } from '@/lib/votes';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -32,6 +33,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     void getPreferences();
+    void loadMyVotes();
   }, []);
 
   useEffect(() => {

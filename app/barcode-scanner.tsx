@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Haptics from "expo-haptics";
+import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useState } from "react";
 import {
@@ -19,13 +20,16 @@ import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { ScreenContainer } from "../components/ui/ScreenContainer";
 import { LevelUpModal } from "../components/gamification/LevelUpModal";
+import { VoteButtons } from "../components/voting/VoteButtons";
 import { colors, radius, spacing, typography } from "../constants/theme";
 import { badgeDefinitions } from "../lib/badges";
 import { hapticNotification } from "../lib/haptics";
 import { useCloudSync } from "../hooks/useCloudSync";
+import { useCountryVotes } from "../hooks/useCountryVotes";
 import { useScanHistory } from "../hooks/useScanHistory";
-import { identifyCountry, isPositiveCountry } from "../lib/scan-logic";
+import { identifyCountry } from "../lib/scan-logic";
 import type { ScanRecord } from "../lib/types";
+import { isVotableCountry, type VoteChoice } from "../lib/votes";
 
 type BarcodeScanningResult = {
   data: string;
@@ -33,8 +37,13 @@ type BarcodeScanningResult = {
 
 export default function CustomBarcodeScanner() {
   const isFocused = useIsFocused();
-  const { scans, gamification, addScan } = useScanHistory();
+  const { scans, gamification, addScan, applyGamificationState } = useScanHistory();
   useCloudSync(scans, gamification);
+  const { getTally, getVerdict, myVote, castVote } = useCountryVotes(
+    scans,
+    gamification,
+    applyGamificationState
+  );
 
   const [manualCode, setManualCode] = useState("");
   const [cameraKey, setCameraKey] = useState(0);
@@ -60,7 +69,7 @@ export default function CustomBarcodeScanner() {
 
   const submitScan = async (barcode: string, source: "camera" | "manual") => {
     const country = identifyCountry(barcode) || "Unknown";
-    const positive = isPositiveCountry(country);
+    const positive = getVerdict(country);
 
     const result = await addScan({ code: barcode, country, isPositive: positive, source });
 
@@ -104,6 +113,27 @@ export default function CustomBarcodeScanner() {
     setReadyToScan(true);
     setCameraKey((v) => v + 1);
     setLatestRecord(null);
+  };
+
+  const handleVote = async (country: string, choice: VoteChoice) => {
+    const outcome = await castVote(country, choice);
+    if (!outcome.ok) {
+      if (outcome.reason === "signed-out") {
+        router.push("/auth");
+      } else if (outcome.reason === "unverified") {
+        Alert.alert(
+          "Verify your email",
+          "Verify your email address in Profile to vote on countries."
+        );
+      }
+      return;
+    }
+    if (outcome.isFirstVote) {
+      setXpToast({ xp: outcome.xp, badgeIds: [] });
+    }
+    if (outcome.leveledUp) {
+      setLevelUpModal({ level: outcome.level });
+    }
   };
 
   if (!permission) {
@@ -192,19 +222,41 @@ export default function CustomBarcodeScanner() {
         </Card>
 
         {latestRecord && (
-          <Card tone={latestRecord.isPositive ? "positive" : "negative"}>
+          <Card
+            tone={
+              isVotableCountry(latestRecord.country)
+                ? latestRecord.isPositive
+                  ? "positive"
+                  : "negative"
+                : "default"
+            }
+          >
             <Text style={styles.latestTitle}>Latest result</Text>
             <Text style={styles.latestCountry}>{latestRecord.country}</Text>
             <Text style={styles.latestMeta}>Barcode: {latestRecord.code}</Text>
             <Text style={styles.latestMeta}>Source: {latestRecord.source}</Text>
-            <Text
-              style={[
-                styles.latestTone,
-                latestRecord.isPositive ? styles.positiveTone : styles.negativeTone,
-              ]}
-            >
-              {latestRecord.isPositive ? "Positive" : "Negative"}
-            </Text>
+
+            {isVotableCountry(latestRecord.country) ? (
+              <>
+                <Text
+                  style={[
+                    styles.latestTone,
+                    latestRecord.isPositive ? styles.positiveTone : styles.negativeTone,
+                  ]}
+                >
+                  {latestRecord.isPositive ? "Community: Positive" : "Community: Negative"}
+                </Text>
+                <View style={{ marginTop: spacing.sm }}>
+                  <VoteButtons
+                    tally={getTally(latestRecord.country)}
+                    myChoice={myVote(latestRecord.country)}
+                    onPress={(choice) => handleVote(latestRecord.country, choice)}
+                  />
+                </View>
+              </>
+            ) : (
+              <Text style={styles.latestMeta}>Not a votable country/region.</Text>
+            )}
           </Card>
         )}
 
