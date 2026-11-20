@@ -28,18 +28,30 @@ Codes SHALL be normalised to digits. 12-digit UPC-A codes SHALL be treated as GT
 - **THEN** an inline error explains the problem and nothing is recorded
 
 ### Requirement: Single capture per barcode
-A barcode in view SHALL produce exactly one scan record until the user chooses to scan again.
+A barcode in view SHALL produce exactly one scan record until the user chooses to scan again. In basket mode, the camera SHALL resume after each capture, and a barcode SHALL produce at most one scan record per open basket.
 
 #### Scenario: Continuous callbacks
 - **WHEN** the camera fires several callbacks for the same code in quick succession
 - **THEN** one scan record is stored
 
+#### Scenario: Basket mode holding one product in view
+- **WHEN** basket mode is on and the same product stays in front of the camera
+- **THEN** one basket item and one scan record are stored
+
 ### Requirement: Result feedback
-The result SHALL show the country, the community verdict and vote controls. When haptics are enabled, a positive verdict SHALL trigger a success haptic and a negative verdict a warning haptic.
+The result SHALL lead with a large verdict and the country with its flag, and SHALL offer one primary action to scan the next product. The community vote controls, the barcode number and type, and the note that the prefix shows the registration country (not the place of manufacture) SHALL be available in a secondary details area of the same result. When haptics are enabled, a positive or neutral verdict SHALL trigger a single success haptic, and a negative verdict SHALL trigger a distinct double-pulse warning pattern.
 
 #### Scenario: Negative verdict
 - **WHEN** a scanned country's community verdict is negative
-- **THEN** a warning haptic fires
+- **THEN** the double-pulse warning haptic fires and the verdict line reads as a clear warning
+
+#### Scenario: Scanning the next product
+- **WHEN** the user taps "Scan next" on a result
+- **THEN** the result closes and the camera is ready for the next barcode
+
+#### Scenario: Voting from the result
+- **WHEN** the user opens "Details & vote" on a result
+- **THEN** the vote controls, barcode details and registration note are shown
 
 ### Requirement: Torch
 The scanner SHALL offer a torch toggle.
@@ -47,3 +59,17 @@ The scanner SHALL offer a torch toggle.
 #### Scenario: Dark aisle
 - **WHEN** the user taps the torch button
 - **THEN** the torch turns on until toggled off or the screen loses focus
+
+### Requirement: Barcode meaning explainer
+Every result SHALL offer an info control that opens a short explanation: the barcode prefix identifies the GS1 organisation where the barcode was registered, which is not necessarily where the product was made or who owns the brand. It SHALL include at least one example and a link to GS1's explanation.
+
+#### Scenario: Opening the explainer
+- **WHEN** the user taps the info control on a result
+- **THEN** the explanation sheet opens, and closing it returns to the same result
+
+### Requirement: Spoken results
+When a screen reader is active, each new result SHALL be announced with the country and the primary verdict. In basket mode, each added item SHALL be announced with its country and verdict, and each duplicate as "already in basket".
+
+#### Scenario: Screen reader scan
+- **WHEN** a screen reader user scans a product registered in a country with a negative verdict
+- **THEN** the screen reader announces "<country>. Community says avoid."
