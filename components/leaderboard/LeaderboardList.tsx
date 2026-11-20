@@ -1,18 +1,17 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { router, useFocusEffect } from "expo-router";
-import React, { useCallback, useState } from "react";
+import { router } from "expo-router";
+import React from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 
-import { Avatar } from "../../components/ui/Avatar";
-import { Card } from "../../components/ui/Card";
-import { EmptyState } from "../../components/ui/EmptyState";
-import { Screen } from "../../components/ui/Screen";
+import { Avatar } from "../ui/Avatar";
+import { Card } from "../ui/Card";
+import { EmptyState } from "../ui/EmptyState";
 import { colors, radius, spacing, typography } from "../../constants/theme";
 import { useAuth } from "../../contexts/AuthContext";
 import { useLayout } from "../../hooks/useLayout";
-import { fetchLeaderboard, type LeaderboardEntry } from "../../lib/cloudSync";
+import type { LeaderboardEntry } from "../../lib/cloudSync";
 import { getRankTitle } from "../../lib/gamification";
 
 const MEDAL = [colors.gold, colors.tierSilver, colors.tierBronze];
@@ -51,49 +50,16 @@ function Podium({ entries, selfUid }: { entries: LeaderboardEntry[]; selfUid?: s
   );
 }
 
-export default function LeaderboardScreen() {
-  const { user, loading: authLoading, isFirebaseConfigured } = useAuth();
+/** The leaderboard body (podium and list). Data comes from useLeaderboard. */
+export function LeaderboardList({ entries, loading }: { entries: LeaderboardEntry[]; loading: boolean }) {
+  const { user, isFirebaseConfigured } = useAuth();
   const { columns } = useLayout();
-  const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-
-  // Load on every focus. This is served from the 30-minute cache, and the
-  // user's own row is patched locally after opting in or syncing. Wait for
-  // auth to restore first so a real fetch carries the persisted session.
-  useFocusEffect(
-    useCallback(() => {
-      if (authLoading) return;
-      let cancelled = false;
-      (async () => {
-        const data = await fetchLeaderboard();
-        if (cancelled) return;
-        setEntries(data);
-        setLoading(false);
-      })();
-      return () => {
-        cancelled = true;
-      };
-    }, [authLoading])
-  );
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    setEntries(await fetchLeaderboard({ force: true }));
-    setRefreshing(false);
-  };
 
   const myIndex = user ? entries.findIndex((e) => e.uid === user.uid) : -1;
   const rest = entries.slice(3);
 
   return (
-    <Screen
-      title="Leaderboard"
-      subtitle="Top scanners who chose to appear publicly."
-      width={columns > 1 ? "wide" : "readable"}
-      refreshing={refreshing}
-      onRefresh={onRefresh}
-    >
+    <View style={styles.root}>
       {!isFirebaseConfigured ? (
         <EmptyState icon="cloud-offline-outline" title="Leaderboard unavailable" text="Accounts aren't set up in this build." />
       ) : loading ? (
@@ -120,7 +86,7 @@ export default function LeaderboardScreen() {
           ) : user ? null : (
             <Card style={styles.youCard}>
               <Ionicons name="information-circle-outline" size={20} color={colors.subtext} />
-              <Text style={styles.youHint}>Sign in from Profile to join the leaderboard.</Text>
+              <Text style={styles.youHint}>Top scanners who chose to appear publicly. Sign in from Profile to join.</Text>
             </Card>
           )}
 
@@ -157,11 +123,14 @@ export default function LeaderboardScreen() {
           )}
         </>
       )}
-    </Screen>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: {
+    gap: spacing.lg,
+  },
   loading: {
     paddingVertical: spacing.xxxl,
   },

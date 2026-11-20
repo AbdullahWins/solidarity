@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import React, { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import { AccountButton } from "../../components/navigation/AccountButton";
 import { ShareStatsButton } from "../../components/share/ShareStatsButton";
 import { Card } from "../../components/ui/Card";
 import { ContributionGraph } from "../../components/ui/ContributionGraph";
@@ -14,6 +15,7 @@ import { SectionHeader } from "../../components/ui/SectionHeader";
 import { StatTile } from "../../components/ui/StatTile";
 import { colors, radius, spacing, typography } from "../../constants/theme";
 import { useLayout } from "../../hooks/useLayout";
+import { usePreferences } from "../../hooks/usePreferences";
 import { useScanHistory } from "../../hooks/useScanHistory";
 import { buildDailyCounts } from "../../lib/gamification";
 import { openCountry } from "../../lib/navigation";
@@ -64,10 +66,11 @@ function HistoryRow({ item, last }: { item: ScanRecord; last: boolean }) {
   );
 }
 
-export default function StatsScreen() {
+export default function HistoryScreen() {
   const { scans, stats, gamification, reload } = useScanHistory();
   const dailyCounts = useMemo(() => buildDailyCounts(scans), [scans]);
   const { columns } = useLayout();
+  const { preferences, update } = usePreferences();
   const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = async () => {
@@ -95,12 +98,11 @@ export default function StatsScreen() {
     return out;
   }, [scans]);
 
-  const overview = (
+  const summary = (
     <Card>
-      <SectionHeader title="Overview" caption={stats.total ? `${stats.total.toLocaleString()} scans in total` : undefined} />
       <View style={styles.overview}>
         <Donut
-          size={124}
+          size={104}
           segments={[
             { value: stats.positive, color: colors.positive },
             { value: stats.negative, color: colors.negative },
@@ -110,14 +112,15 @@ export default function StatsScreen() {
         />
         <View style={styles.overviewStats}>
           {[
-            { label: "Positive", value: stats.positive, color: colors.positive },
-            { label: "Negative", value: stats.negative, color: colors.negative },
-            { label: "Countries", value: new Set(scans.map((s) => s.country)).size, color: colors.accent },
+            { label: "Scans", value: stats.total.toLocaleString(), color: colors.accent },
+            { label: "Positive", value: stats.positive.toLocaleString(), color: colors.positive },
+            { label: "Negative", value: stats.negative.toLocaleString(), color: colors.negative },
+            { label: "Streak", value: `${gamification.currentStreak}d`, color: colors.gold },
           ].map((row) => (
             <View key={row.label} style={styles.overviewRow}>
               <View style={[styles.legendDot, { backgroundColor: row.color }]} />
               <Text style={styles.overviewLabel}>{row.label}</Text>
-              <Text style={styles.overviewValue}>{row.value.toLocaleString()}</Text>
+              <Text style={styles.overviewValue}>{row.value}</Text>
             </View>
           ))}
         </View>
@@ -125,42 +128,19 @@ export default function StatsScreen() {
     </Card>
   );
 
-  const tiles = (
-    <View style={styles.tileRow}>
-      <StatTile label="Current streak" value={`${gamification.currentStreak}d`} icon="flame" tone="gold" />
-      <StatTile label="Longest streak" value={`${gamification.longestStreak}d`} icon="podium" tone="gold" />
-      <StatTile label="Level" value={gamification.level} icon="star" tone="accent" />
-    </View>
-  );
-
-  const recent = (
+  const list = (
     <Card padded={false}>
-      <View style={styles.cardHead}>
-        <SectionHeader
-          title="History"
-          caption={scans.length > RECENT_LIMIT ? `Latest ${RECENT_LIMIT} of ${scans.length.toLocaleString()}` : undefined}
-        />
-      </View>
-      {scans.length === 0 ? (
-        <View style={styles.emptyWrap}>
-          <EmptyState
-            icon="scan-outline"
-            title="No scans yet"
-            text="Scan a product to start building your history."
-            actionLabel="Start scanning"
-            onAction={() => router.navigate("/")}
-          />
+      {scans.length > RECENT_LIMIT ? (
+        <Text style={styles.listCaption}>{`Latest ${RECENT_LIMIT} of ${scans.length.toLocaleString()}`}</Text>
+      ) : null}
+      {groups.map((group) => (
+        <View key={group.key}>
+          <Text style={styles.dayLabel}>{dayLabel(group.key)}</Text>
+          {group.items.map((item, i) => (
+            <HistoryRow key={item.id} item={item} last={i === group.items.length - 1} />
+          ))}
         </View>
-      ) : (
-        groups.map((group) => (
-          <View key={group.key}>
-            <Text style={styles.dayLabel}>{dayLabel(group.key)}</Text>
-            {group.items.map((item, i) => (
-              <HistoryRow key={item.id} item={item} last={i === group.items.length - 1} />
-            ))}
-          </View>
-        ))
-      )}
+      ))}
     </Card>
   );
 
@@ -194,47 +174,75 @@ export default function StatsScreen() {
       </Card>
     ) : null;
 
-  const share = scans.length > 0 ? <ShareStatsButton scans={scans} gamification={gamification} stats={stats} /> : null;
+  const moreOpen = preferences.historyMoreStatsOpen;
+  const more = (
+    <View style={styles.more}>
+      <Pressable
+        onPress={() => void update({ historyMoreStatsOpen: !moreOpen })}
+        style={({ pressed }) => [styles.moreToggle, pressed && { opacity: 0.7 }]}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: moreOpen }}
+        accessibilityLabel="More stats"
+      >
+        <Text style={styles.moreLabel}>More stats</Text>
+        <Ionicons name={moreOpen ? "chevron-up" : "chevron-down"} size={18} color={colors.subtext} />
+      </Pressable>
+      {moreOpen ? (
+        <View style={styles.moreBody}>
+          <Card>
+            <SectionHeader title="Daily activity" />
+            <ContributionGraph dailyCounts={dailyCounts} />
+          </Card>
+          <View style={styles.tileRow}>
+            <StatTile label="Longest streak" value={`${gamification.longestStreak}d`} icon="podium" tone="gold" />
+            <StatTile label="Level" value={gamification.level} icon="star" tone="accent" />
+            <StatTile label="Countries" value={new Set(scans.map((s) => s.country)).size} icon="flag" tone="accent" />
+          </View>
+          {top}
+          <ShareStatsButton scans={scans} gamification={gamification} stats={stats} />
+        </View>
+      ) : null}
+    </View>
+  );
 
   return (
     <Screen
-      title="Stats"
-      subtitle="Your activity. Stored only on this device."
+      title="History"
+      subtitle="Stored only on this device."
+      headerRight={<AccountButton />}
       width={columns > 1 ? "wide" : "readable"}
       refreshing={refreshing}
       onRefresh={onRefresh}
     >
-      <Card>
-        <SectionHeader title="Daily activity" />
-        <ContributionGraph dailyCounts={dailyCounts} />
-      </Card>
-
-      {columns > 1 ? (
+      {scans.length === 0 ? (
+        <>
+          <EmptyState
+            icon="scan-outline"
+            title="No scans yet"
+            text="Scan a product to start building your history."
+            actionLabel="Start scanning"
+            onAction={() => router.navigate("/")}
+          />
+          <View style={styles.privacy}>
+            <Ionicons name="lock-closed-outline" size={14} color={colors.muted} />
+            <Text style={styles.privacyText}>Scan history never leaves your device.</Text>
+          </View>
+        </>
+      ) : columns > 1 ? (
         <View style={styles.split}>
           <View style={styles.splitCol}>
-            {overview}
-            {tiles}
-            {share}
-            {top}
+            {summary}
+            {more}
           </View>
-          <View style={styles.splitCol}>{recent}</View>
+          <View style={styles.splitCol}>{list}</View>
         </View>
       ) : (
         <>
-          {overview}
-          {tiles}
-          {share}
-          {top}
-          {recent}
+          {summary}
+          {list}
+          {more}
         </>
       )}
-
-      {scans.length === 0 ? (
-        <View style={styles.privacy}>
-          <Ionicons name="lock-closed-outline" size={14} color={colors.muted} />
-          <Text style={styles.privacyText}>Scan history never leaves your device.</Text>
-        </View>
-      ) : null}
     </Screen>
   );
 }
@@ -286,9 +294,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
   },
-  emptyWrap: {
-    padding: spacing.lg,
-    paddingTop: 0,
+  listCaption: {
+    ...typography.caption,
+    color: colors.muted,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+  },
+  more: {
+    gap: spacing.md,
+  },
+  moreToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
+    minHeight: 44,
+  },
+  moreLabel: {
+    ...typography.bodyStrong,
+    color: colors.subtext,
+  },
+  moreBody: {
+    gap: spacing.lg,
   },
   dayLabel: {
     ...typography.overline,

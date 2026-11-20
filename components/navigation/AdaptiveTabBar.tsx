@@ -76,9 +76,9 @@ function TabItem({
 export function AdaptiveTabBar({ state, descriptors, emitter, navigateToTab }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { useRail, height } = useLayout();
-  // Phone landscape: ~360-430dp tall. Six labelled items plus the logo don't
-  // fit, so drop the logo and labels (accessibility labels remain).
-  const compactRail = useRail && height < 520;
+  // Three labelled items plus the logo fit even phone landscape (~360dp tall);
+  // only very short windows drop the logo and labels (accessibility labels remain).
+  const compactRail = useRail && height < 340;
 
   const items = state.routes.map((route, index) => {
     const { options } = descriptors[route.key];
@@ -156,7 +156,7 @@ const styles = StyleSheet.create({
   },
   bar: {
     width: "100%",
-    maxWidth: 560,
+    maxWidth: 380,
     height: BOTTOM_BAR_HEIGHT,
     flexDirection: "row",
     alignItems: "center",
@@ -221,7 +221,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(142, 166, 255, 0.16)",
   },
   label: {
-    fontSize: 10.5,
+    fontSize: 11.5,
     fontWeight: "700",
     letterSpacing: 0.1,
   },

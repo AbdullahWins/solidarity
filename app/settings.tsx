@@ -1,24 +1,21 @@
-import { Ionicons } from "@expo/vector-icons";
 import Constants from "expo-constants";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import React, { useState } from "react";
-import { Alert, Platform, Pressable, Share, StyleSheet, Text, View } from "react-native";
+import { Alert, Platform, Share, StyleSheet, Text, View } from "react-native";
 
-import { Avatar } from "../../components/ui/Avatar";
-import { Card } from "../../components/ui/Card";
-import { ListRow } from "../../components/ui/ListRow";
-import { Screen } from "../../components/ui/Screen";
-import { APP_NAME, APP_SHARE_URL, LINKS } from "../../constants/app-info";
-import { colors, spacing, typography } from "../../constants/theme";
-import { useAuth } from "../../contexts/AuthContext";
-import { useLayout } from "../../hooks/useLayout";
-import { usePreferences } from "../../hooks/usePreferences";
-import { useScanHistory } from "../../hooks/useScanHistory";
-import { openInAppBrowser, openStoreReview } from "../../lib/links";
-import { cancelStreakReminders, requestNotificationPermission, scheduleStreakReminders } from "../../lib/notifications";
+import { Card } from "../components/ui/Card";
+import { ListRow } from "../components/ui/ListRow";
+import { Screen } from "../components/ui/Screen";
+import { APP_NAME, APP_SHARE_URL, LINKS } from "../constants/app-info";
+import { colors, spacing, typography } from "../constants/theme";
+import { useLayout } from "../hooks/useLayout";
+import { usePreferences } from "../hooks/usePreferences";
+import { useScanHistory } from "../hooks/useScanHistory";
+import { openInAppBrowser, openStoreReview } from "../lib/links";
+import { cancelStreakReminders, requestNotificationPermission, scheduleStreakReminders } from "../lib/notifications";
 
-const logo = require("../../assets/images/logo.png");
+const logo = require("../assets/images/logo.png");
 
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -34,7 +31,6 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
 export default function SettingsScreen() {
   const { preferences, update } = usePreferences();
   const { gamification, clearHistory, scans } = useScanHistory();
-  const { user } = useAuth();
   const { columns } = useLayout();
   const [togglingReminder, setTogglingReminder] = useState(false);
 
@@ -79,34 +75,6 @@ export default function SettingsScreen() {
         { text: "Clear history", style: "destructive", onPress: () => void clearHistory() },
       ]
     );
-
-  const accountRow = (
-    <Card padded={false}>
-      <Pressable
-        onPress={() => (user ? router.navigate("/profile") : router.push("/auth"))}
-        style={({ pressed }) => [styles.account, pressed && { backgroundColor: colors.panel }]}
-        accessibilityRole="button"
-        accessibilityLabel={user ? `Account, ${user.displayName || user.email}` : "Sign in or create account"}
-      >
-        {user ? (
-          <Avatar name={user.displayName || user.email || "S"} seed={user.uid} size={48} />
-        ) : (
-          <View style={styles.guest}>
-            <Ionicons name="person" size={22} color={colors.subtext} />
-          </View>
-        )}
-        <View style={styles.accountText}>
-          <Text style={styles.accountName} numberOfLines={1}>
-            {user ? user.displayName || "Scanner" : "Not signed in"}
-          </Text>
-          <Text style={styles.accountSub} numberOfLines={1}>
-            {user ? user.email : "Back up progress, vote and join the leaderboard"}
-          </Text>
-        </View>
-        <Ionicons name="chevron-forward" size={18} color={colors.muted} />
-      </Pressable>
-    </Card>
-  );
 
   const preferencesGroup = (
     <Group title="Preferences">
@@ -229,11 +197,10 @@ export default function SettingsScreen() {
   );
 
   return (
-    <Screen title="Settings" width={columns > 1 ? "wide" : "readable"}>
+    <Screen inTabs={false} width={columns > 1 ? "wide" : "readable"}>
       {columns > 1 ? (
         <View style={styles.split}>
           <View style={styles.col}>
-            {accountRow}
             {preferencesGroup}
             {dataGroup}
             {legalGroup}
@@ -246,7 +213,6 @@ export default function SettingsScreen() {
         </View>
       ) : (
         <>
-          {accountRow}
           {preferencesGroup}
           {dataGroup}
           {legalGroup}
@@ -271,33 +237,6 @@ const styles = StyleSheet.create({
   },
   group: {
     gap: spacing.sm,
-  },
-  account: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    padding: spacing.lg,
-  },
-  guest: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.panelStrong,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  accountText: {
-    flex: 1,
-  },
-  accountName: {
-    ...typography.heading,
-    color: colors.text,
-  },
-  accountSub: {
-    ...typography.caption,
-    color: colors.subtext,
-    fontWeight: "500",
-    marginTop: 2,
   },
   groupTitle: {
     ...typography.overline,

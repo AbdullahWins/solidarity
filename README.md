@@ -13,8 +13,9 @@ Website: <https://abdullahwins.github.io/solidarity/> (source in [`website/`](we
 - **Community voting**: every country's positive/negative colour comes from public up/down
   tallies. Verified accounts can vote ([`lib/votes.ts`](lib/votes.ts)).
 - **Gamification**: XP, levels, streaks and badges for scanning and voting.
-- **Stats**: activity graph, history, top countries, shareable stats image.
-- **Leaderboard**: opt-in, verified accounts only.
+- **Three tabs**: Scan (a big verdict first, details and voting one tap away), History (summary,
+  day-grouped scans, and more stats on demand) and Community (countries, plus the opt-in
+  leaderboard for verified accounts). Profile and Settings open from the avatar in the header.
 - **Optional accounts**: everything works offline without one. Raw scan history never leaves the
   device.
 

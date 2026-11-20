@@ -134,13 +134,31 @@ const SCREENS = [
     label: "Scan result",
     path: "/",
     act: async (page) => {
+      await page.getByText("Type a code instead", { exact: true }).click();
       await page.getByPlaceholder("e.g. 4006381333931").fill(ean("560", "123456789"));
       await page.getByText("Look up", { exact: true }).click();
     },
   },
-  { id: "04-stats", label: "Stats", path: "/stats" },
-  { id: "05-leaderboard", label: "Leaderboard", path: "/leaderboard" },
+  {
+    id: "04-scan-details",
+    label: "Scan result details",
+    path: "/",
+    act: async (page) => {
+      await page.getByText("Type a code instead", { exact: true }).click();
+      await page.getByPlaceholder("e.g. 4006381333931").fill(ean("400", "638133393"));
+      await page.getByText("Look up", { exact: true }).click();
+      await page.waitForTimeout(800);
+      await page.getByText("Details & vote", { exact: true }).click();
+    },
+  },
+  { id: "05-history", label: "History", path: "/history" },
   { id: "06-community", label: "Community", path: "/community" },
+  {
+    id: "06b-leaderboard",
+    label: "Leaderboard",
+    path: "/community",
+    act: async (page) => page.getByText("Leaderboard", { exact: true }).click(),
+  },
   { id: "07-country", label: "Country details", path: "/country/Portugal" },
   { id: "08-profile", label: "Profile", path: "/profile" },
   { id: "09-settings", label: "Settings", path: "/settings" },

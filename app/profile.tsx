@@ -3,25 +3,25 @@ import { router } from "expo-router";
 import React, { useState } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
 
-import { DeleteAccountSheet } from "../../components/account/DeleteAccountSheet";
-import { RankTitle } from "../../components/gamification/RankTitle";
-import { ShareStatsButton } from "../../components/share/ShareStatsButton";
-import { Avatar } from "../../components/ui/Avatar";
-import { Badge } from "../../components/ui/Badge";
-import { Button } from "../../components/ui/Button";
-import { Card } from "../../components/ui/Card";
-import { ListRow } from "../../components/ui/ListRow";
-import { ProgressBar } from "../../components/ui/ProgressBar";
-import { ProgressRing } from "../../components/ui/ProgressRing";
-import { Screen } from "../../components/ui/Screen";
-import { SectionHeader } from "../../components/ui/SectionHeader";
-import { colors, radius, spacing, typography } from "../../constants/theme";
-import { useAuth } from "../../contexts/AuthContext";
-import { useCloudSync } from "../../hooks/useCloudSync";
-import { useLayout } from "../../hooks/useLayout";
-import { useScanHistory } from "../../hooks/useScanHistory";
-import { badgeDefinitions } from "../../lib/badges";
-import { levelProgress } from "../../lib/gamification";
+import { DeleteAccountSheet } from "../components/account/DeleteAccountSheet";
+import { RankTitle } from "../components/gamification/RankTitle";
+import { ShareStatsButton } from "../components/share/ShareStatsButton";
+import { Avatar } from "../components/ui/Avatar";
+import { Badge } from "../components/ui/Badge";
+import { Button } from "../components/ui/Button";
+import { Card } from "../components/ui/Card";
+import { ListRow } from "../components/ui/ListRow";
+import { ProgressBar } from "../components/ui/ProgressBar";
+import { ProgressRing } from "../components/ui/ProgressRing";
+import { Screen } from "../components/ui/Screen";
+import { SectionHeader } from "../components/ui/SectionHeader";
+import { colors, radius, spacing, typography } from "../constants/theme";
+import { useAuth } from "../contexts/AuthContext";
+import { useCloudSync } from "../hooks/useCloudSync";
+import { useLayout } from "../hooks/useLayout";
+import { useScanHistory } from "../hooks/useScanHistory";
+import { badgeDefinitions } from "../lib/badges";
+import { levelProgress } from "../lib/gamification";
 
 export default function ProfileScreen() {
   const { scans, gamification, stats, reload } = useScanHistory();
@@ -196,10 +196,16 @@ export default function ProfileScreen() {
     </Card>
   );
 
+  const settingsCard = (
+    <Card padded={false}>
+      <ListRow icon="settings-outline" label="Settings" subtitle="Preferences, your data, help and legal" onPress={() => router.push("/settings")} last />
+    </Card>
+  );
+
   return (
     <>
       <Screen
-        title="Profile"
+        inTabs={false}
         width={columns > 1 ? "wide" : "readable"}
         refreshing={refreshing}
         onRefresh={onRefresh}
@@ -210,6 +216,7 @@ export default function ProfileScreen() {
               {levelCard}
               {scans.length > 0 && <ShareStatsButton scans={scans} gamification={gamification} stats={stats} />}
               {accountCard}
+              {settingsCard}
             </View>
             <View style={[styles.splitCol, { flex: 1.3 }]}>{badges}</View>
           </View>
@@ -219,6 +226,7 @@ export default function ProfileScreen() {
             {scans.length > 0 && <ShareStatsButton scans={scans} gamification={gamification} stats={stats} />}
             {accountCard}
             {badges}
+            {settingsCard}
           </>
         )}
       </Screen>

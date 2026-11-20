@@ -50,7 +50,7 @@ export default function CountryScreen() {
     if (outcome.ok) return;
     if (outcome.reason === "signed-out") router.push("/auth");
     else if (outcome.reason === "unverified")
-      Alert.alert("Verify your email", "Confirm your email address from the Profile tab to vote.");
+      Alert.alert("Verify your email", "Confirm your email address from Profile (the avatar at the top) to vote.");
     else Alert.alert("Vote not saved", "Check your connection and try again.");
   };
 

@@ -34,32 +34,12 @@ export default function TabLayout() {
         options={{ title: "Scan", tabBarIcon: icon("scan-circle", "scan-circle-outline") }}
       />
       <Tabs.Screen
-        name="stats"
-        options={{ title: "Stats", tabBarIcon: icon("stats-chart", "stats-chart-outline") }}
-      />
-      <Tabs.Screen
-        name="leaderboard"
-        options={{
-          title: "Leaderboard",
-          tabBarLabel: "Ranks",
-          tabBarIcon: icon("trophy", "trophy-outline"),
-        }}
+        name="history"
+        options={{ title: "History", tabBarIcon: icon("time", "time-outline") }}
       />
       <Tabs.Screen
         name="community"
-        options={{
-          title: "Community",
-          tabBarLabel: "Vote",
-          tabBarIcon: icon("earth", "earth-outline"),
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{ title: "Profile", tabBarIcon: icon("person-circle", "person-circle-outline") }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{ title: "Settings", tabBarIcon: icon("settings", "settings-outline") }}
+        options={{ title: "Community", tabBarIcon: icon("earth", "earth-outline") }}
       />
     </Tabs>
   );

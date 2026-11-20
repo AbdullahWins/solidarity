@@ -3,6 +3,8 @@ import { router } from "expo-router";
 import React, { useCallback, useMemo, useState } from "react";
 import { Alert, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 
+import { LeaderboardList } from "../../components/leaderboard/LeaderboardList";
+import { AccountButton } from "../../components/navigation/AccountButton";
 import { Card } from "../../components/ui/Card";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { Flag } from "../../components/ui/Flag";
@@ -14,6 +16,7 @@ import { colors, layout as sizes, radius, spacing, typography } from "../../cons
 import { useAuth } from "../../contexts/AuthContext";
 import { useCountryVotes } from "../../hooks/useCountryVotes";
 import { useLayout } from "../../hooks/useLayout";
+import { useLeaderboard } from "../../hooks/useLeaderboard";
 import { useScanHistory } from "../../hooks/useScanHistory";
 import { hapticSelection } from "../../lib/haptics";
 import { openCountry } from "../../lib/navigation";
@@ -21,6 +24,7 @@ import { getVotableCountryNames, type CountryTally, type VoteChoice } from "../.
 
 const ALL_COUNTRIES = getVotableCountryNames();
 type Tab = "all" | "mine";
+type Section = "countries" | "leaderboard";
 type Sort = "votes" | "az" | "positive" | "negative";
 
 const SORTS: { key: Sort; label: string; icon: React.ComponentProps<typeof Ionicons>["name"] }[] = [
@@ -47,13 +51,17 @@ export default function CommunityScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [tab, setTab] = useState<Tab>("all");
   const [sort, setSort] = useState<Sort>("votes");
+  // Tab screens stay mounted, so this choice survives switching tabs.
+  const [section, setSection] = useState<Section>("countries");
+  const leaderboard = useLeaderboard(section === "leaderboard");
 
   const columns = layout.columns;
   const sidePad = Math.max(pad.paddingRight, (layout.width - (layout.useRail ? 88 : 0) - sizes.wide) / 2);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await reload(true);
+    if (section === "leaderboard") await leaderboard.refresh();
+    else await reload(true);
     setRefreshing(false);
   };
 
@@ -98,7 +106,7 @@ export default function CommunityScreen() {
       if (outcome.ok) return;
       if (outcome.reason === "signed-out") router.push("/auth");
       else if (outcome.reason === "unverified")
-        Alert.alert("Verify your email", "Confirm your email address from the Profile tab to vote.");
+        Alert.alert("Verify your email", "Confirm your email address from Profile (the avatar at the top) to vote.");
       else Alert.alert("Vote not saved", "Check your connection and try again.");
     },
     [castVote]
@@ -140,69 +148,83 @@ export default function CommunityScreen() {
     );
   };
 
+  const summary = communityStats.total
+    ? `${communityStats.total.toLocaleString()} votes across ${communityStats.voted} ${communityStats.voted === 1 ? "country" : "countries"}`
+    : "No votes yet. Be the first.";
+
+  const chips = (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+      {user ? (
+        <Pressable
+          onPress={() => {
+            hapticSelection();
+            setTab(tab === "mine" ? "all" : "mine");
+          }}
+          style={[styles.chip, tab === "mine" && styles.chipActive]}
+          accessibilityRole="button"
+          accessibilityState={{ selected: tab === "mine" }}
+          accessibilityLabel="Show only countries I voted on"
+        >
+          <Ionicons name="person-outline" size={14} color={tab === "mine" ? colors.bg : colors.subtext} />
+          <Text style={[styles.chipText, tab === "mine" && styles.chipTextActive]}>
+            {`My votes${myVoted.length ? ` · ${myVoted.length}` : ""}`}
+          </Text>
+        </Pressable>
+      ) : null}
+      {SORTS.map((s) => {
+        const active = sort === s.key;
+        return (
+          <Pressable
+            key={s.key}
+            onPress={() => {
+              if (!active) {
+                hapticSelection();
+                setSort(s.key);
+              }
+            }}
+            style={[styles.chip, active && styles.chipActive]}
+            accessibilityRole="button"
+            accessibilityState={{ selected: active }}
+            accessibilityLabel={`Sort by ${s.label}`}
+          >
+            <Ionicons name={s.icon} size={14} color={active ? colors.bg : colors.subtext} />
+            <Text style={[styles.chipText, active && styles.chipTextActive]}>{s.label}</Text>
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
+
   const header = (
     <View style={styles.headerWrap}>
-      <ScreenHeader title="Community" subtitle="Every country's colour comes from open voting, not from us." />
-
-      <Card tone="hero">
-        <View style={styles.statsRow}>
-          {[
-            { label: "Votes", value: communityStats.total, color: colors.text },
-            { label: "Up", value: communityStats.up, color: colors.positive },
-            { label: "Down", value: communityStats.down, color: colors.negative },
-            { label: "Countries", value: communityStats.voted, color: colors.gold },
-          ].map((s) => (
-            <View key={s.label} style={styles.stat}>
-              <Text style={[styles.statValue, { color: s.color }]}>{s.value.toLocaleString()}</Text>
-              <Text style={styles.statLabel}>{s.label}</Text>
-            </View>
-          ))}
+      <ScreenHeader
+        title="Community"
+        subtitle={section === "countries" ? summary : "Top scanners who chose to appear publicly."}
+        right={<AccountButton />}
+      />
+      <SegmentedControl
+        segments={[
+          { key: "countries", label: "Countries" },
+          { key: "leaderboard", label: "Leaderboard" },
+        ]}
+        value={section}
+        onChange={(k) => setSection(k as Section)}
+      />
+      {section === "leaderboard" ? (
+        <LeaderboardList entries={leaderboard.entries} loading={leaderboard.loading} />
+      ) : (
+        <View style={styles.controls}>
+          <SearchField placeholder={`Search ${ALL_COUNTRIES.length} countries`} value={search} onChangeText={setSearch} />
+          {chips}
+          {!user ? (
+            <Pressable onPress={() => router.push("/auth")} style={styles.heroHint} accessibilityRole="button">
+              <Ionicons name="lock-closed" size={12} color={colors.subtext} />
+              <Text style={styles.heroHintText}>Anyone can see the counts. </Text>
+              <Text style={[styles.heroHintText, styles.heroHintLink]}>Sign in to vote</Text>
+            </Pressable>
+          ) : null}
         </View>
-        {!user ? (
-          <Pressable onPress={() => router.push("/auth")} style={styles.heroHint} accessibilityRole="button">
-            <Ionicons name="lock-closed" size={12} color={colors.subtext} />
-            <Text style={styles.heroHintText}>Anyone can see the counts. </Text>
-            <Text style={[styles.heroHintText, styles.heroHintLink]}>Sign in to vote</Text>
-          </Pressable>
-        ) : null}
-      </Card>
-
-      <View style={styles.controls}>
-        <SearchField placeholder={`Search ${ALL_COUNTRIES.length} countries`} value={search} onChangeText={setSearch} />
-        {user ? (
-          <SegmentedControl
-            segments={[
-              { key: "all", label: "All countries" },
-              { key: "mine", label: `My votes${myVoted.length ? ` · ${myVoted.length}` : ""}` },
-            ]}
-            value={tab}
-            onChange={(k) => setTab(k as Tab)}
-          />
-        ) : null}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-          {SORTS.map((s) => {
-            const active = sort === s.key;
-            return (
-              <Pressable
-                key={s.key}
-                onPress={() => {
-                  if (!active) {
-                    hapticSelection();
-                    setSort(s.key);
-                  }
-                }}
-                style={[styles.chip, active && styles.chipActive]}
-                accessibilityRole="button"
-                accessibilityState={{ selected: active }}
-                accessibilityLabel={`Sort by ${s.label}`}
-              >
-                <Ionicons name={s.icon} size={14} color={active ? colors.bg : colors.subtext} />
-                <Text style={[styles.chipText, active && styles.chipTextActive]}>{s.label}</Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      </View>
+      )}
     </View>
   );
 
@@ -223,12 +245,12 @@ export default function CommunityScreen() {
     <Screen scroll={false}>
       <FlatList
         key={`cols-${columns}`}
-        data={data}
+        data={section === "countries" ? data : []}
         keyExtractor={(c) => c}
         numColumns={columns}
         renderItem={renderItem}
         ListHeaderComponent={header}
-        ListEmptyComponent={empty}
+        ListEmptyComponent={section === "countries" ? empty : undefined}
         contentContainerStyle={{
           paddingTop: pad.paddingTop,
           paddingBottom: pad.paddingBottom,
@@ -262,28 +284,12 @@ const styles = StyleSheet.create({
     gap: spacing.lg,
     marginBottom: spacing.lg,
   },
-  statsRow: {
-    flexDirection: "row",
-  },
-  stat: {
-    flex: 1,
-    alignItems: "center",
-  },
-  statValue: {
-    ...typography.stat,
-  },
-  statLabel: {
-    ...typography.overline,
-    color: colors.subtext,
-    marginTop: 2,
-  },
   heroHint: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     flexWrap: "wrap",
     gap: 4,
-    marginTop: spacing.md,
   },
   heroHintText: {
     ...typography.caption,

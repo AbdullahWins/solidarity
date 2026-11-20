@@ -108,6 +108,8 @@ export default function RootLayout() {
               options={{ presentation: "fullScreenModal", animation: "fade", headerShown: false, gestureEnabled: false }}
             />
             <Stack.Screen name="country/[name]" options={{ headerShown: false, animation: "slide_from_right" }} />
+            <Stack.Screen name="profile" options={{ title: "Profile", headerBackTitle: "Back", animation: "slide_from_right" }} />
+            <Stack.Screen name="settings" options={{ title: "Settings", headerBackTitle: "Back", animation: "slide_from_right" }} />
             <Stack.Screen name="+not-found" options={{ title: "Not found" }} />
           </Stack>
           <StatusBar style="light" />

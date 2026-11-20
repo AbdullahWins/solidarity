@@ -3,11 +3,14 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 export type Preferences = {
   hapticsEnabled: boolean;
   streakReminderEnabled: boolean;
+  /** History: whether the "More stats" section is expanded. */
+  historyMoreStatsOpen: boolean;
 };
 
 export const DEFAULT_PREFERENCES: Preferences = {
   hapticsEnabled: true,
   streakReminderEnabled: false,
+  historyMoreStatsOpen: false,
 };
 
 const KEY = "solidarity:v1:preferences";
