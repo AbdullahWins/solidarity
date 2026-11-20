@@ -1,66 +1,78 @@
 import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
-import { Image, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
 import { ContributionGraph } from "../ui/ContributionGraph";
-import { APP_NAME, APP_SHARE_URL } from "../../constants/app-info";
-import { colors, radius, spacing, typography } from "../../constants/theme";
+import { APP_NAME, LINKS } from "../../constants/app-info";
+import { colors, gradients, radius, spacing, typography } from "../../constants/theme";
 import { badgeDefinitions } from "../../lib/badges";
-import { levelProgress } from "../../lib/gamification";
+import { getRankTitle, levelProgress } from "../../lib/gamification";
 import type { GamificationState } from "../../lib/types";
 
 type Props = {
   gamification: GamificationState;
   stats: { total: number; positive: number; negative: number };
   dailyCounts: Record<string, number>;
+  onReady?: () => void;
 };
 
-export function StatsShareCard({ gamification, stats, dailyCounts }: Props) {
+const logo = require("../../assets/images/logo.png");
+
+/** Fixed-size card rendered off-screen and captured as the shareable image. */
+export function StatsShareCard({ gamification, stats, dailyCounts, onReady }: Props) {
   const { level, progress } = levelProgress(gamification.xp);
-  const unlockedBadges = badgeDefinitions.filter((b) =>
-    gamification.unlockedBadgeIds.includes(b.id)
-  ).slice(0, 4);
+  const unlockedBadges = badgeDefinitions.filter((b) => gamification.unlockedBadgeIds.includes(b.id)).slice(0, 5);
 
   return (
-    <View style={styles.card}>
+    <View style={styles.card} collapsable={false}>
+      <LinearGradient colors={["#1A1310", "#0E1015", "#0B0C12"]} style={StyleSheet.absoluteFill} />
+      <LinearGradient
+        colors={["rgba(240, 100, 60, 0.35)", "rgba(240, 100, 60, 0)"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0.8, y: 0.6 }}
+        style={StyleSheet.absoluteFill}
+      />
+
       <View style={styles.header}>
-        <Image
-          source={require("../../assets/images/icon.png")}
-          style={styles.logo}
-        />
+        <Image source={logo} style={styles.logo} onLoad={onReady} onError={onReady} cachePolicy="memory" />
         <Text style={styles.appName}>{APP_NAME}</Text>
+        <Text style={styles.rank}>{getRankTitle(level)}</Text>
       </View>
 
-      <Text style={styles.levelLabel}>Level {level}</Text>
+      <View>
+        <Text style={styles.levelLabel}>Level {level}</Text>
+        <Text style={styles.xp}>{gamification.xp.toLocaleString()} XP</Text>
+      </View>
       <View style={styles.progressTrack}>
-        <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
-      </View>
-
-      <View style={styles.streakRow}>
-        <Ionicons name="flame" size={22} color={colors.gold} />
-        <Text style={styles.streakText}>{gamification.currentStreak}-day streak</Text>
+        <LinearGradient
+          colors={[colors.goldStrong, colors.gold]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={[styles.progressFill, { width: `${Math.max(progress, 0.02) * 100}%` }]}
+        />
       </View>
 
       <View style={styles.statsRow}>
-        <View style={styles.statTile}>
-          <Text style={styles.statValue}>{stats.total}</Text>
-          <Text style={styles.statLabel}>Scans</Text>
-        </View>
-        <View style={styles.statTile}>
-          <Text style={[styles.statValue, { color: colors.positive }]}>{stats.positive}</Text>
-          <Text style={styles.statLabel}>Positive</Text>
-        </View>
-        <View style={styles.statTile}>
-          <Text style={[styles.statValue, { color: colors.negative }]}>{stats.negative}</Text>
-          <Text style={styles.statLabel}>Negative</Text>
-        </View>
+        {[
+          { label: "Scans", value: stats.total, color: colors.text },
+          { label: "Streak", value: `${gamification.currentStreak}d`, color: colors.gold },
+          { label: "Positive", value: stats.positive, color: colors.positive },
+          { label: "Negative", value: stats.negative, color: colors.negative },
+        ].map((s) => (
+          <View key={s.label} style={styles.statTile}>
+            <Text style={[styles.statValue, { color: s.color }]}>{s.value}</Text>
+            <Text style={styles.statLabel}>{s.label}</Text>
+          </View>
+        ))}
       </View>
 
       <View style={styles.graphWrap}>
         <ContributionGraph
           dailyCounts={dailyCounts}
-          weeksToShow={12}
-          cellSize={12}
+          weeksToShow={17}
+          cellSize={14}
           showMonthLabels={false}
           interactive={false}
         />
@@ -69,30 +81,30 @@ export function StatsShareCard({ gamification, stats, dailyCounts }: Props) {
       {unlockedBadges.length > 0 && (
         <View style={styles.badgeRow}>
           {unlockedBadges.map((badge) => (
-            <View key={badge.id} style={styles.badgeIconWrap}>
+            <LinearGradient key={badge.id} colors={gradients.gold} style={styles.badgeIconWrap}>
               <Ionicons name={badge.icon} size={18} color={colors.gold} />
-            </View>
+            </LinearGradient>
           ))}
         </View>
       )}
 
       <View style={styles.footer}>
-        <Text style={styles.footerText}>Tracked with {APP_NAME}</Text>
-        <Text style={styles.footerLink}>{APP_SHARE_URL.replace("https://", "")}</Text>
+        <Text style={styles.footerText}>Know what you buy · {LINKS.website.replace(/^https:\/\//, "").replace(/\/$/, "")}</Text>
       </View>
     </View>
   );
 }
 
-const CARD_WIDTH = 360;
+const CARD_WIDTH = 380;
 
 const styles = StyleSheet.create({
   card: {
     width: CARD_WIDTH,
-    backgroundColor: colors.bg,
-    borderRadius: radius.xl,
+    borderRadius: radius.xxl,
     padding: spacing.xl,
-    gap: spacing.md,
+    gap: spacing.lg,
+    overflow: "hidden",
+    backgroundColor: colors.bg,
   },
   header: {
     flexDirection: "row",
@@ -100,39 +112,37 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   logo: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 9,
   },
   appName: {
     ...typography.heading,
     color: colors.text,
+    flex: 1,
+  },
+  rank: {
+    ...typography.overline,
+    color: colors.gold,
   },
   levelLabel: {
-    ...typography.display,
+    ...typography.hero,
+    color: colors.text,
+  },
+  xp: {
+    ...typography.bodyStrong,
     color: colors.gold,
   },
   progressTrack: {
     width: "100%",
-    height: 8,
-    borderRadius: radius.pill,
-    backgroundColor: colors.panelSoft,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.panelStrong,
     overflow: "hidden",
   },
   progressFill: {
-    height: 8,
-    backgroundColor: colors.gold,
-    borderRadius: radius.pill,
-  },
-  streakRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-  },
-  streakText: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: "700",
+    height: 10,
+    borderRadius: 5,
   },
   statsRow: {
     flexDirection: "row",
@@ -142,12 +152,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.panel,
     borderRadius: radius.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
     alignItems: "center",
   },
   statValue: {
     ...typography.heading,
-    color: colors.text,
+    fontVariant: ["tabular-nums"],
   },
   statLabel: {
     ...typography.caption,
@@ -155,32 +165,26 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   graphWrap: {
-    alignItems: "flex-start",
+    alignItems: "center",
   },
   badgeRow: {
     flexDirection: "row",
     gap: spacing.sm,
   },
   badgeIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: radius.pill,
-    backgroundColor: `${colors.gold}22`,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
   },
   footer: {
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingTop: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderStrong,
+    paddingTop: spacing.md,
   },
   footerText: {
     ...typography.caption,
     color: colors.subtext,
-  },
-  footerLink: {
-    ...typography.caption,
-    color: colors.accent,
-    marginTop: 2,
   },
 });

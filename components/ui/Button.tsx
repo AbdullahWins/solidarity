@@ -1,97 +1,116 @@
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
-import {
-  ActivityIndicator,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  ViewStyle,
-} from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 
-import { colors, radius, spacing, typography } from "../../constants/theme";
+import { colors, gradients, layout, radius, shadow, spacing, typography } from "../../constants/theme";
+import { PressableScale } from "./PressableScale";
+
+type Variant = "primary" | "brand" | "secondary" | "ghost" | "danger";
 
 type Props = {
   label: string;
   onPress: () => void;
-  variant?: "primary" | "secondary" | "ghost";
+  variant?: Variant;
+  icon?: React.ComponentProps<typeof Ionicons>["name"];
+  size?: "md" | "lg";
   disabled?: boolean;
   loading?: boolean;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
+  accessibilityHint?: string;
 };
 
 export function Button({
   label,
   onPress,
   variant = "primary",
+  icon,
+  size = "md",
   disabled,
   loading,
   style,
+  accessibilityHint,
 }: Props) {
+  const filled = variant === "primary" || variant === "brand";
+  const fg =
+    filled ? colors.onAccent : variant === "danger" ? colors.negative : variant === "ghost" ? colors.accent : colors.text;
+
+  const content = (
+    <View style={[styles.inner, size === "lg" && styles.innerLg]}>
+      {loading ? (
+        <ActivityIndicator color={fg} />
+      ) : (
+        <>
+          {icon ? <Ionicons name={icon} size={18} color={fg} /> : null}
+          <Text style={[styles.label, { color: fg }]} numberOfLines={1}>
+            {label}
+          </Text>
+        </>
+      )}
+    </View>
+  );
+
   return (
-    <TouchableOpacity
+    <PressableScale
       onPress={onPress}
       disabled={disabled || loading}
-      activeOpacity={0.8}
+      accessibilityLabel={label}
+      accessibilityHint={accessibilityHint}
+      accessibilityState={{ disabled: !!(disabled || loading), busy: !!loading }}
       style={[
         styles.base,
-        variant === "primary" && styles.primary,
         variant === "secondary" && styles.secondary,
-        variant === "ghost" && styles.ghost,
-        (disabled || loading) && styles.disabled,
+        variant === "danger" && styles.danger,
+        filled && shadow.glow(variant === "brand" ? colors.brand : colors.accentStrong),
         style,
       ]}
     >
-      {loading ? (
-        <ActivityIndicator color={variant === "primary" ? "#fff" : colors.text} />
-      ) : (
-        <Text
-          style={[
-            styles.label,
-            variant === "primary" && styles.labelPrimary,
-            variant === "secondary" && styles.labelSecondary,
-            variant === "ghost" && styles.labelGhost,
-          ]}
+      {filled ? (
+        <LinearGradient
+          colors={variant === "brand" ? gradients.brand : gradients.accent}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.gradient}
         >
-          {label}
-        </Text>
+          {content}
+        </LinearGradient>
+      ) : (
+        content
       )}
-    </TouchableOpacity>
+    </PressableScale>
   );
 }
 
 const styles = StyleSheet.create({
   base: {
-    borderRadius: radius.md,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
+    borderRadius: radius.lg,
+    minHeight: layout.touch + 4,
+  },
+  gradient: {
+    borderRadius: radius.lg,
+  },
+  inner: {
+    minHeight: layout.touch + 4,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 46,
+    gap: spacing.sm,
+    paddingHorizontal: spacing.xl,
   },
-  primary: {
-    backgroundColor: colors.accentStrong,
+  innerLg: {
+    minHeight: 56,
   },
   secondary: {
-    backgroundColor: colors.panelSoft,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: colors.panelStrong,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderStrong,
   },
-  ghost: {
-    backgroundColor: "transparent",
-  },
-  disabled: {
-    opacity: 0.5,
+  danger: {
+    backgroundColor: "rgba(251, 113, 133, 0.10)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(251, 113, 133, 0.35)",
   },
   label: {
-    ...typography.body,
-    fontWeight: "700",
-  },
-  labelPrimary: {
-    color: "#ffffff",
-  },
-  labelSecondary: {
-    color: colors.text,
-  },
-  labelGhost: {
-    color: colors.accent,
+    ...typography.bodyStrong,
   },
 });

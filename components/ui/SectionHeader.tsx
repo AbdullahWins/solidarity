@@ -1,22 +1,28 @@
 import React from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { colors, spacing, typography } from "../../constants/theme";
 
 type Props = {
   title: string;
+  caption?: string;
   actionLabel?: string;
   onAction?: () => void;
 };
 
-export function SectionHeader({ title, actionLabel, onAction }: Props) {
+export function SectionHeader({ title, caption, actionLabel, onAction }: Props) {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>{title}</Text>
+      <View style={styles.text}>
+        <Text style={styles.title} accessibilityRole="header">
+          {title}
+        </Text>
+        {caption ? <Text style={styles.caption}>{caption}</Text> : null}
+      </View>
       {actionLabel && onAction ? (
-        <TouchableOpacity onPress={onAction}>
+        <Pressable onPress={onAction} hitSlop={10} accessibilityRole="button">
           <Text style={styles.action}>{actionLabel}</Text>
-        </TouchableOpacity>
+        </Pressable>
       ) : null}
     </View>
   );
@@ -26,12 +32,21 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: spacing.sm,
+    alignItems: "flex-end",
+    marginBottom: spacing.md,
+    gap: spacing.md,
+  },
+  text: {
+    flex: 1,
   },
   title: {
     ...typography.heading,
     color: colors.text,
+  },
+  caption: {
+    ...typography.caption,
+    color: colors.muted,
+    marginTop: 2,
   },
   action: {
     ...typography.caption,

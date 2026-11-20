@@ -1,12 +1,11 @@
-import React from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { useState } from "react";
+import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
+import Animated, { useAnimatedStyle, withSpring } from "react-native-reanimated";
 
-import { colors, radius, spacing, typography } from "../../constants/theme";
+import { colors, layout, radius, typography } from "../../constants/theme";
+import { hapticSelection } from "../../lib/haptics";
 
-type Segment = {
-  key: string;
-  label: string;
-};
+type Segment = { key: string; label: string };
 
 type Props = {
   segments: Segment[];
@@ -14,26 +13,45 @@ type Props = {
   onChange: (key: string) => void;
 };
 
+const PAD = 4;
+
 export function SegmentedControl({ segments, value, onChange }: Props) {
+  const [width, setWidth] = useState(0);
+  const index = Math.max(0, segments.findIndex((s) => s.key === value));
+  const segWidth = segments.length ? (width - PAD * 2) / segments.length : 0;
+
+  const thumb = useAnimatedStyle(() => ({
+    width: segWidth,
+    transform: [{ translateX: withSpring(index * segWidth, { damping: 20, stiffness: 240 }) }],
+  }));
+
   return (
-    <View style={styles.track}>
+    <View
+      style={styles.track}
+      onLayout={(e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width)}
+      accessibilityRole="tablist"
+    >
+      {width > 0 ? <Animated.View style={[styles.thumb, thumb]} /> : null}
       {segments.map((segment) => {
         const active = segment.key === value;
         return (
-          <TouchableOpacity
+          <Pressable
             key={segment.key}
-            style={[styles.segment, active && styles.segmentActive]}
-            onPress={() => onChange(segment.key)}
-            activeOpacity={0.8}
+            style={styles.segment}
+            onPress={() => {
+              if (!active) {
+                hapticSelection();
+                onChange(segment.key);
+              }
+            }}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
+            accessibilityLabel={segment.label}
           >
-            <Text
-              style={[styles.label, active && styles.labelActive]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-            >
+            <Text style={[styles.label, active && styles.labelActive]} numberOfLines={1} maxFontSizeMultiplier={1.3}>
               {segment.label}
             </Text>
-          </TouchableOpacity>
+          </Pressable>
         );
       })}
     </View>
@@ -43,22 +61,28 @@ export function SegmentedControl({ segments, value, onChange }: Props) {
 const styles = StyleSheet.create({
   track: {
     flexDirection: "row",
-    height: 40,
-    backgroundColor: colors.panelSoft,
-    borderWidth: 1,
+    height: layout.touch,
+    backgroundColor: colors.panel,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     borderRadius: radius.pill,
-    padding: 4,
+    padding: PAD,
+  },
+  thumb: {
+    position: "absolute",
+    top: PAD,
+    bottom: PAD,
+    left: PAD,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceHigh,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderStrong,
   },
   segment: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.xs,
-  },
-  segmentActive: {
-    backgroundColor: colors.panelStrong,
+    paddingHorizontal: 6,
   },
   label: {
     ...typography.caption,

@@ -1,12 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import React from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from "react-native-reanimated";
+import { StyleSheet, Text, View } from "react-native";
 
-import { colors, radius, spacing, typography } from "../../constants/theme";
-import { hapticNotification } from "../../lib/haptics";
+import { colors, layout, radius, spacing, typography } from "../../constants/theme";
+import { hapticImpact } from "../../lib/haptics";
 import type { CountryTally, VoteChoice } from "../../lib/votes";
+import { PressableScale } from "../ui/PressableScale";
 
 type Props = {
   tally: CountryTally | undefined;
@@ -14,6 +14,8 @@ type Props = {
   onPress: (choice: VoteChoice) => void;
   disabled?: boolean;
   compact?: boolean;
+  /** Shows the up/down share bar above the buttons. */
+  showBar?: boolean;
 };
 
 function VoteButton({
@@ -31,92 +33,129 @@ function VoteButton({
   disabled?: boolean;
   compact?: boolean;
 }) {
-  const scale = useSharedValue(1);
-  const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
-
-  const handlePress = () => {
-    scale.value = withSequence(withTiming(0.85, { duration: 80 }), withTiming(1, { duration: 120 }));
-    hapticNotification(Haptics.NotificationFeedbackType.Success);
-    onPress();
-  };
-
   const tone = choice === "up" ? colors.positive : colors.negative;
+  const label = choice === "up" ? "Upvote" : "Downvote";
 
   return (
-    <Animated.View style={[animatedStyle, { flex: 1 }]}>
-      <TouchableOpacity
-        onPress={handlePress}
-        disabled={disabled}
-        activeOpacity={0.8}
-        style={[
-          styles.button,
-          compact && styles.buttonCompact,
-          active && { backgroundColor: `${tone}22`, borderColor: `${tone}88` },
-          disabled && styles.disabled,
-        ]}
-      >
-        <Ionicons
-          name={choice === "up" ? "arrow-up-circle" : "arrow-down-circle"}
-          size={compact ? 16 : 18}
-          color={active ? tone : colors.subtext}
-        />
-        <Text style={[styles.buttonText, active && { color: tone }]}>{count}</Text>
-      </TouchableOpacity>
-    </Animated.View>
+    <PressableScale
+      onPress={() => {
+        hapticImpact(Haptics.ImpactFeedbackStyle.Medium);
+        onPress();
+      }}
+      disabled={disabled}
+      pressedScale={0.94}
+      accessibilityLabel={`${label}, ${count} votes${active ? ", your vote. Tap again to remove" : ""}`}
+      accessibilityState={{ selected: active, disabled: !!disabled }}
+      style={[
+        styles.button,
+        compact && styles.buttonCompact,
+        active && { backgroundColor: `${tone}24`, borderColor: `${tone}99` },
+      ]}
+    >
+      <Ionicons
+        name={choice === "up" ? (active ? "thumbs-up" : "thumbs-up-outline") : active ? "thumbs-down" : "thumbs-down-outline"}
+        size={compact ? 16 : 18}
+        color={active ? tone : colors.subtext}
+      />
+      <Text style={[styles.count, active && { color: tone }]}>{count}</Text>
+    </PressableScale>
   );
 }
 
-export function VoteButtons({ tally, myChoice, onPress, disabled, compact }: Props) {
+export function VoteButtons({ tally, myChoice, onPress, disabled, compact, showBar }: Props) {
   const upvotes = tally?.upvotes ?? 0;
   const downvotes = tally?.downvotes ?? 0;
+  const total = upvotes + downvotes;
+  const upShare = total > 0 ? upvotes / total : 0.5;
 
   return (
-    <View style={styles.row}>
-      <VoteButton
-        choice="up"
-        count={upvotes}
-        active={myChoice === "up"}
-        onPress={() => onPress("up")}
-        disabled={disabled}
-        compact={compact}
-      />
-      <VoteButton
-        choice="down"
-        count={downvotes}
-        active={myChoice === "down"}
-        onPress={() => onPress("down")}
-        disabled={disabled}
-        compact={compact}
-      />
+    <View style={styles.wrap}>
+      {showBar ? (
+        <View style={styles.barRow}>
+          {total > 0 ? (
+            <View style={styles.bar} accessibilityLabel={`${Math.round(upShare * 100)} percent positive`}>
+              {upvotes > 0 ? <View style={[styles.barUp, { flex: upvotes }]} /> : null}
+              {downvotes > 0 ? <View style={[styles.barDown, { flex: downvotes }]} /> : null}
+            </View>
+          ) : (
+            <View style={[styles.bar, styles.barEmpty]} />
+          )}
+          <Text style={styles.barText}>{total > 0 ? `${Math.round(upShare * 100)}% positive` : "No votes yet"}</Text>
+        </View>
+      ) : null}
+      <View style={styles.row}>
+        <VoteButton
+          choice="up"
+          count={upvotes}
+          active={myChoice === "up"}
+          onPress={() => onPress("up")}
+          disabled={disabled}
+          compact={compact}
+        />
+        <VoteButton
+          choice="down"
+          count={downvotes}
+          active={myChoice === "down"}
+          onPress={() => onPress("down")}
+          disabled={disabled}
+          compact={compact}
+        />
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  wrap: {
+    gap: spacing.sm,
+  },
   row: {
     flexDirection: "row",
     gap: spacing.sm,
   },
   button: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: spacing.xs,
+    gap: spacing.sm,
+    minHeight: layout.touch,
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: colors.panelSoft,
+    backgroundColor: colors.panel,
     borderRadius: radius.md,
-    paddingVertical: spacing.sm,
   },
   buttonCompact: {
-    paddingVertical: spacing.xs + 2,
+    minHeight: layout.touch - 4,
   },
-  disabled: {
-    opacity: 0.5,
-  },
-  buttonText: {
-    ...typography.caption,
+  count: {
+    ...typography.bodyStrong,
     color: colors.text,
-    fontWeight: "700",
+    fontVariant: ["tabular-nums"],
+  },
+  barRow: {
+    gap: spacing.xs,
+  },
+  bar: {
+    flexDirection: "row",
+    height: 6,
+    borderRadius: 3,
+    overflow: "hidden",
+    gap: 2,
+  },
+  barUp: {
+    backgroundColor: colors.positive,
+    borderRadius: 3,
+  },
+  barDown: {
+    backgroundColor: colors.negative,
+    borderRadius: 3,
+  },
+  barEmpty: {
+    backgroundColor: colors.panelStrong,
+  },
+  barText: {
+    ...typography.caption,
+    color: colors.subtext,
   },
 });

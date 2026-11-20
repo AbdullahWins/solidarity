@@ -21,7 +21,7 @@ export function RankTitle({ level }: Props) {
   const color = TIER_COLOR[tier];
 
   return (
-    <View style={[styles.chip, { borderColor: `${color}88`, backgroundColor: `${color}1a` }]}>
+    <View style={[styles.chip, { borderColor: `${color}66`, backgroundColor: `${color}1A` }]}>
       <View style={[styles.dot, { backgroundColor: color }]} />
       <Text style={[styles.text, { color }]}>{tier}</Text>
     </View>

@@ -1,13 +1,14 @@
-import { Ionicons } from "@expo/vector-icons";
 import * as MediaLibrary from "expo-media-library";
 import * as Sharing from "expo-sharing";
-import React, { useRef, useState } from "react";
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import ViewShot from "react-native-view-shot";
+import React, { useMemo, useRef, useState } from "react";
+import { Alert, Platform, StyleSheet, View } from "react-native";
+import ViewShot, { type ViewShotRef } from "react-native-view-shot";
 
-import { colors, radius, spacing, typography } from "../../constants/theme";
+import { spacing } from "../../constants/theme";
 import { buildDailyCounts } from "../../lib/gamification";
 import type { GamificationState, ScanRecord } from "../../lib/types";
+import { Button } from "../ui/Button";
+import { IconButton } from "../ui/IconButton";
 import { StatsShareCard } from "./StatsShareCard";
 
 type Props = {
@@ -17,71 +18,105 @@ type Props = {
 };
 
 export function ShareStatsButton({ scans, gamification, stats }: Props) {
-  const shotRef = useRef<ViewShot>(null);
-  const [sharing, setSharing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const dailyCounts = buildDailyCounts(scans);
+  const shotRef = useRef<ViewShotRef>(null);
+  const [busy, setBusy] = useState<"share" | "save" | null>(null);
+  const dailyCounts = useMemo(() => buildDailyCounts(scans), [scans]);
+  // Only mount the off-screen card while capturing, so it isn't laid out and
+  // rasterised on every render of Stats/Profile.
+  const [mounted, setMounted] = useState(false);
+  const readyRef = useRef<(() => void) | null>(null);
+
+  const capture = async (): Promise<string | null> => {
+    // Wait until the card's logo has decoded (or 1.5s), then one more frame.
+    const ready = new Promise<void>((resolve) => {
+      readyRef.current = resolve;
+      setTimeout(resolve, 1500);
+    });
+    setMounted(true);
+    await ready;
+    await new Promise((r) => requestAnimationFrame(() => r(null)));
+    try {
+      return (await shotRef.current?.capture?.()) ?? null;
+    } catch {
+      return null;
+    }
+  };
 
   const handleShare = async () => {
-    if (sharing) return;
-    setSharing(true);
+    if (busy) return;
+    setBusy("share");
     try {
-      const uri = await shotRef.current?.capture?.();
-      if (uri) {
-        const available = await Sharing.isAvailableAsync();
-        if (available) {
-          await Sharing.shareAsync(uri, { mimeType: "image/png" });
-        }
+      const uri = await capture();
+      if (!uri) throw new Error("capture");
+      if (!(await Sharing.isAvailableAsync())) {
+        Alert.alert("Sharing unavailable", "Sharing isn't available on this device.");
+        return;
       }
+      await Sharing.shareAsync(uri, { mimeType: "image/png", UTI: "public.png", dialogTitle: "Share your stats" });
+    } catch {
+      Alert.alert("Couldn't share", "Something went wrong while creating your stats image.");
     } finally {
-      setSharing(false);
+      setBusy(null);
+      setMounted(false);
     }
   };
 
   const handleSave = async () => {
-    if (saving) return;
-    setSaving(true);
+    if (busy) return;
+    setBusy("save");
     try {
+      // Write-only access: no read permission on Android 13+, add-only on iOS.
       const permission = await MediaLibrary.requestPermissionsAsync(true);
       if (!permission.granted) {
-        Alert.alert("Permission needed", "Allow photo access to save your stats image.");
+        Alert.alert("Permission needed", "Allow Solidarity to add photos so it can save your stats image.");
         return;
       }
-      const uri = await shotRef.current?.capture?.();
-      if (uri) {
-        await MediaLibrary.saveToLibraryAsync(uri);
-        Alert.alert("Saved", "Your stats image was saved to your photos.");
-      }
+      const uri = await capture();
+      if (!uri) throw new Error("capture");
+      // SDK 58: the legacy saveToLibraryAsync now throws at runtime.
+      await MediaLibrary.Asset.create(uri);
+      Alert.alert("Saved", "Your stats image is in your photos.");
+    } catch {
+      Alert.alert("Couldn't save", "Something went wrong while saving your stats image.");
     } finally {
-      setSaving(false);
+      setBusy(null);
+      setMounted(false);
     }
   };
 
   return (
     <>
       <View style={styles.row}>
-        <TouchableOpacity
-          style={[styles.button, styles.shareButton]}
+        <Button
+          label={busy === "share" ? "Preparing…" : "Share my stats"}
+          icon="share-social"
+          variant="brand"
           onPress={handleShare}
-          disabled={sharing}
-        >
-          <Ionicons name="share-social" size={16} color="#ffffff" />
-          <Text style={styles.buttonText}>{sharing ? "Preparing..." : "Share stats"}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.button, styles.saveButton]}
-          onPress={handleSave}
-          disabled={saving}
-        >
-          <Ionicons name="download" size={16} color={colors.text} />
-        </TouchableOpacity>
+          loading={busy === "share"}
+          style={styles.share}
+        />
+        {Platform.OS !== "web" ? (
+          <IconButton icon="download-outline" onPress={handleSave} accessibilityLabel="Save stats image to photos" size={48} />
+        ) : null}
       </View>
 
-      <View style={styles.offscreen} pointerEvents="none">
-        <ViewShot ref={shotRef} options={{ format: "png", quality: 1 }}>
-          <StatsShareCard gamification={gamification} stats={stats} dailyCounts={dailyCounts} />
-        </ViewShot>
-      </View>
+      {mounted ? (
+        <View
+          style={styles.offscreen}
+          pointerEvents="none"
+          collapsable={false}
+          importantForAccessibility="no-hide-descendants"
+        >
+          <ViewShot ref={shotRef} options={{ format: "png", quality: 1, result: "tmpfile" }}>
+            <StatsShareCard
+              gamification={gamification}
+              stats={stats}
+              dailyCounts={dailyCounts}
+              onReady={() => readyRef.current?.()}
+            />
+          </ViewShot>
+        </View>
+      ) : null}
     </>
   );
 }
@@ -89,35 +124,15 @@ export function ShareStatsButton({ scans, gamification, stats }: Props) {
 const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
+    alignItems: "center",
     gap: spacing.sm,
   },
-  button: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.xs,
-    borderRadius: radius.md,
-    paddingVertical: spacing.sm + 2,
-    paddingHorizontal: spacing.md,
-  },
-  shareButton: {
+  share: {
     flex: 1,
-    backgroundColor: colors.accentStrong,
-  },
-  saveButton: {
-    width: 46,
-    backgroundColor: colors.panelSoft,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  buttonText: {
-    ...typography.body,
-    color: "#ffffff",
-    fontWeight: "700",
   },
   offscreen: {
     position: "absolute",
-    top: -9999,
-    left: -9999,
+    top: -10000,
+    left: -10000,
   },
 });
