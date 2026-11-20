@@ -4,7 +4,8 @@ import * as Haptics from "expo-haptics";
 import { router, useIsFocused } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Linking, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
-import Animated, { FadeIn, FadeInDown, FadeOutDown, LinearTransition } from "react-native-reanimated";
+import Animated, { FadeIn, FadeInDown, FadeInUp, FadeOutUp, LinearTransition } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { colors, radius, spacing, typography } from "../../constants/theme";
 import { useCloudSync } from "../../hooks/useCloudSync";
@@ -19,7 +20,6 @@ import type { ScanRecord } from "../../lib/types";
 import { openCountry } from "../../lib/navigation";
 import { isVotableCountry, type VoteChoice } from "../../lib/votes";
 import { LevelUpModal } from "../gamification/LevelUpModal";
-import { useBottomBarSpace } from "../navigation/AdaptiveTabBar";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
@@ -41,7 +41,7 @@ const KIND_LABEL: Record<string, string> = {
 export function ScanScreen() {
   const isFocused = useIsFocused();
   const layout = useLayout();
-  const barSpace = useBottomBarSpace();
+  const insets = useSafeAreaInsets();
   const { scans, gamification, addScan, applyGamificationState, reload } = useScanHistory();
   useCloudSync(scans, gamification);
   const { getTally, getVerdict, myVote, castVote, reload: reloadVotes } = useCountryVotes(
@@ -381,9 +381,9 @@ export function ScanScreen() {
 
       {toast && (
         <Animated.View
-          entering={FadeInDown.springify().damping(16)}
-          exiting={FadeOutDown.duration(200)}
-          style={[styles.toast, { bottom: barSpace + spacing.md }]}
+          entering={FadeInUp.springify().damping(16)}
+          exiting={FadeOutUp.duration(200)}
+          style={[styles.toast, { top: insets.top + spacing.sm }]}
           pointerEvents="none"
           accessibilityLiveRegion="polite"
         >
