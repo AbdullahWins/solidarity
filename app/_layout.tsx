@@ -16,6 +16,7 @@ import { scheduleStreakReminders } from "@/lib/notifications";
 import { shouldShowOnboarding } from "@/lib/onboarding";
 import { getPreferences } from "@/lib/preferences";
 import { getGamificationState } from "@/lib/storage";
+import { loadRules } from "@/lib/countryRules";
 import { loadMyVotes } from "@/lib/votes";
 
 void SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -61,6 +62,7 @@ export default function RootLayout() {
   useEffect(() => {
     void SystemUI.setBackgroundColorAsync(colors.bg).catch(() => {});
     void loadMyVotes();
+    void loadRules();
     void refreshReminders();
     void shouldShowOnboarding().then(setNeedsIntro);
     const sub = AppState.addEventListener("change", (s) => {
@@ -110,6 +112,7 @@ export default function RootLayout() {
             <Stack.Screen name="country/[name]" options={{ headerShown: false, animation: "slide_from_right" }} />
             <Stack.Screen name="profile" options={{ title: "Profile", headerBackTitle: "Back", animation: "slide_from_right" }} />
             <Stack.Screen name="settings" options={{ title: "Settings", headerBackTitle: "Back", animation: "slide_from_right" }} />
+            <Stack.Screen name="rules" options={{ title: "My country rules", headerBackTitle: "Back", animation: "slide_from_right" }} />
             <Stack.Screen name="+not-found" options={{ title: "Not found" }} />
           </Stack>
           <StatusBar style="light" />

@@ -5,6 +5,8 @@ export type ScanRecord = {
   isPositive: boolean;
   source: "camera" | "manual";
   scannedAt: string; // ISO 8601, UTC
+  /** The user's personal rule for this country at scan time, if any. */
+  rule?: "avoid" | "support";
 };
 
 export type GamificationState = {

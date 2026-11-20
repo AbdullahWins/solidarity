@@ -9,10 +9,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { colors, radius, spacing, typography } from "../../constants/theme";
 import { useCloudSync } from "../../hooks/useCloudSync";
+import { useCountryRules } from "../../hooks/useCountryRules";
 import { useCountryVotes } from "../../hooks/useCountryVotes";
 import { useLayout } from "../../hooks/useLayout";
 import { useScanHistory } from "../../hooks/useScanHistory";
 import { badgeDefinitions } from "../../lib/badges";
+import { resolveAnswer } from "../../lib/countryRules";
 import { parseBarcode } from "../../lib/gtin";
 import { hapticNotification } from "../../lib/haptics";
 import { countryForPrefix } from "../../lib/scan-logic";
@@ -20,6 +22,7 @@ import type { ScanRecord } from "../../lib/types";
 import { openCountry } from "../../lib/navigation";
 import { isVotableCountry, type VoteChoice } from "../../lib/votes";
 import { AccountButton } from "../navigation/AccountButton";
+import { RuleSwitch } from "../rules/RuleSwitch";
 import { LevelUpModal } from "../gamification/LevelUpModal";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
@@ -49,6 +52,7 @@ export function ScanScreen() {
     gamification,
     applyGamificationState
   );
+  const rules = useCountryRules();
   const [permission, requestPermission] = useCameraPermissions();
 
   const [manualCode, setManualCode] = useState("");
@@ -89,15 +93,16 @@ export function ScanScreen() {
 
       const country = countryForPrefix(parsed.prefix) ?? "Unknown";
       const positive = getVerdict(country);
+      const answer = resolveAnswer(country, positive);
       try {
-        const result = await addScan({ code: parsed.code, country, isPositive: positive, source });
+        const result = await addScan({ code: parsed.code, country, isPositive: positive, source, rule: answer.rule });
         setLatest({ record: result.record, kind: parsed.kind });
         setDetailsOpen(false);
         setManualOpen(false);
         setToast({ xp: result.gamification.xp, badgeIds: result.newlyUnlockedBadgeIds });
         if (result.leveledUp) setLevelUp(result.gamification.level);
         hapticNotification(
-          isVotableCountry(country) && !positive
+          answer.tone === "negative"
             ? Haptics.NotificationFeedbackType.Warning
             : Haptics.NotificationFeedbackType.Success
         );
@@ -224,26 +229,38 @@ export function ScanScreen() {
     ? (() => {
         const { record, kind } = latest;
         const votable = isVotableCountry(record.country);
-        const verdict = votable ? getVerdict(record.country) : null;
+        const community = votable ? getVerdict(record.country) : null;
+        const answer = resolveAnswer(record.country, community ?? true, rules);
+        const verdict = answer.tone === "neutral" ? null : answer.tone === "positive";
         const tally = votable ? getTally(record.country) : undefined;
         const votes = (tally?.upvotes ?? 0) + (tally?.downvotes ?? 0);
         const tone = verdict === null ? colors.subtext : verdict ? colors.positive : colors.negative;
+        const communityLine =
+          votes > 0
+            ? `${community ? "Positive" : "Negative"} from ${votes.toLocaleString()} vote${votes === 1 ? "" : "s"}`
+            : "no votes yet";
         const headline =
-          verdict === null
-            ? record.country === "Unknown"
-              ? "Unknown origin"
-              : "Not a country range"
-            : verdict
-              ? "Looks fine"
-              : "Community says avoid";
+          answer.source === "rule"
+            ? answer.rule === "avoid"
+              ? `You avoid ${record.country}`
+              : `You support ${record.country}`
+            : verdict === null
+              ? record.country === "Unknown"
+                ? "Unknown origin"
+                : "Not a country range"
+              : verdict
+                ? "Looks fine"
+                : "Community says avoid";
         const caption =
-          verdict === null
-            ? record.country === "Unknown"
-              ? "This prefix isn’t assigned to a country."
-              : "This range isn’t a country, so it has no verdict."
-            : votes > 0
-              ? `Community verdict from ${votes.toLocaleString()} vote${votes === 1 ? "" : "s"}`
-              : "No community votes yet";
+          answer.source === "rule"
+            ? `Community: ${communityLine}`
+            : verdict === null
+              ? record.country === "Unknown"
+                ? "This prefix isn’t assigned to a country."
+                : "This range isn’t a country, so it has no verdict."
+              : votes > 0
+                ? `Community verdict from ${votes.toLocaleString()} vote${votes === 1 ? "" : "s"}`
+                : "No community votes yet";
         return (
           <Animated.View entering={FadeInDown.springify().damping(18)} layout={LinearTransition}>
             <Card tone={verdict === null ? "default" : verdict ? "positive" : "negative"}>
@@ -277,9 +294,10 @@ export function ScanScreen() {
 
               {detailsOpen ? (
                 <Animated.View entering={FadeIn.duration(180)} style={styles.details}>
+                  {votable ? <RuleSwitch country={record.country} /> : null}
                   {votable ? (
                     <View style={styles.voteBlock}>
-                      <Text style={styles.voteLabel}>What do you think?</Text>
+                      <Text style={styles.voteLabel}>What does the community think?</Text>
                       <VoteButtons
                         tally={tally}
                         myChoice={myVote(record.country)}

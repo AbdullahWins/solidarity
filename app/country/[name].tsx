@@ -12,6 +12,7 @@ import { Flag } from "../../components/ui/Flag";
 import { IconButton } from "../../components/ui/IconButton";
 import { ScreenBackground } from "../../components/ui/Screen";
 import { SectionHeader } from "../../components/ui/SectionHeader";
+import { RuleSwitch } from "../../components/rules/RuleSwitch";
 import { VoteButtons } from "../../components/voting/VoteButtons";
 import { colors, layout as sizes, radius, spacing, typography } from "../../constants/theme";
 import { useCountryVotes } from "../../hooks/useCountryVotes";
@@ -107,6 +108,13 @@ export default function CountryScreen() {
     </Card>
   );
 
+  const ruleCard = votable ? (
+    <Card>
+      <SectionHeader title="Your rule" caption="Leads your scan results. Stored only on this device." />
+      <RuleSwitch country={country} showCaption={false} />
+    </Card>
+  ) : null;
+
   const prefixCard = (
     <Card>
       <SectionHeader title="GS1 prefixes" caption="Barcodes starting with these digits are registered here" />
@@ -185,6 +193,7 @@ export default function CountryScreen() {
           {wide ? (
             <View style={styles.split}>
               <View style={styles.col}>
+                {ruleCard}
                 {verdictCard}
                 {prefixCard}
               </View>
@@ -192,6 +201,7 @@ export default function CountryScreen() {
             </View>
           ) : (
             <>
+              {ruleCard}
               {verdictCard}
               {prefixCard}
               {scansCard}

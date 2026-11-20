@@ -61,6 +61,7 @@ export function useScanHistory() {
       country: string;
       isPositive: boolean;
       source: "camera" | "manual";
+      rule?: "avoid" | "support";
     }) => {
       const record: ScanRecord = {
         id: generateScanId(),
@@ -69,6 +70,7 @@ export function useScanHistory() {
         isPositive: input.isPositive,
         source: input.source,
         scannedAt: new Date().toISOString(),
+        ...(input.rule ? { rule: input.rule } : {}),
       };
 
       const nextScans = await persistScan(record);

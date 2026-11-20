@@ -9,6 +9,7 @@ import { ListRow } from "../components/ui/ListRow";
 import { Screen } from "../components/ui/Screen";
 import { APP_NAME, APP_SHARE_URL, LINKS } from "../constants/app-info";
 import { colors, spacing, typography } from "../constants/theme";
+import { useCountryRules } from "../hooks/useCountryRules";
 import { useLayout } from "../hooks/useLayout";
 import { usePreferences } from "../hooks/usePreferences";
 import { useScanHistory } from "../hooks/useScanHistory";
@@ -30,6 +31,7 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
 
 export default function SettingsScreen() {
   const { preferences, update } = usePreferences();
+  const ruleCount = Object.keys(useCountryRules()).length;
   const { gamification, clearHistory, scans } = useScanHistory();
   const { columns } = useLayout();
   const [togglingReminder, setTogglingReminder] = useState(false);
@@ -99,6 +101,12 @@ export default function SettingsScreen() {
 
   const dataGroup = (
     <Group title="Your data">
+      <ListRow
+        icon="shield-checkmark-outline"
+        label="My country rules"
+        subtitle={`${ruleCount} rule${ruleCount === 1 ? "" : "s"} · Avoid or Support, on this device only`}
+        onPress={() => router.push("/rules")}
+      />
       <ListRow
         icon="trash-outline"
         label="Clear scan history"

@@ -14,16 +14,17 @@ import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { VoteButtons } from "../../components/voting/VoteButtons";
 import { colors, layout as sizes, radius, spacing, typography } from "../../constants/theme";
 import { useAuth } from "../../contexts/AuthContext";
+import { useCountryRules } from "../../hooks/useCountryRules";
 import { useCountryVotes } from "../../hooks/useCountryVotes";
 import { useLayout } from "../../hooks/useLayout";
 import { useLeaderboard } from "../../hooks/useLeaderboard";
 import { useScanHistory } from "../../hooks/useScanHistory";
 import { hapticSelection } from "../../lib/haptics";
 import { openCountry } from "../../lib/navigation";
-import { getVotableCountryNames, type CountryTally, type VoteChoice } from "../../lib/votes";
+import { getVotableCountryNames, normalizeCountryKey, type CountryTally, type VoteChoice } from "../../lib/votes";
 
 const ALL_COUNTRIES = getVotableCountryNames();
-type Tab = "all" | "mine";
+type Tab = "all" | "mine" | "rules";
 type Section = "countries" | "leaderboard";
 type Sort = "votes" | "az" | "positive" | "negative";
 
@@ -66,9 +67,11 @@ export default function CommunityScreen() {
   };
 
   const myVoted = useMemo(() => ALL_COUNTRIES.filter((c) => myVote(c) !== undefined), [myVote]);
+  const rules = useCountryRules();
+  const ruled = useMemo(() => ALL_COUNTRIES.filter((c) => rules[normalizeCountryKey(c)]), [rules]);
 
   const data = useMemo(() => {
-    const base = tab === "mine" ? myVoted : ALL_COUNTRIES;
+    const base = tab === "mine" ? myVoted : tab === "rules" ? ruled : ALL_COUNTRIES;
     const q = search.trim().toLowerCase();
     const filtered = q ? base.filter((c) => c.toLowerCase().includes(q)) : [...base];
     const byName = (a: string, b: string) => a.localeCompare(b);
@@ -86,7 +89,7 @@ export default function CommunityScreen() {
       default:
         return filtered.sort(byName);
     }
-  }, [search, tab, sort, myVoted, getTally]);
+  }, [search, tab, sort, myVoted, ruled, getTally]);
 
   const communityStats = useMemo(() => {
     let up = 0;
@@ -116,6 +119,7 @@ export default function CommunityScreen() {
     const verdict = getVerdict(country);
     const tally = getTally(country);
     const mine = myVote(country);
+    const rule = rules[normalizeCountryKey(country)];
     const total = totalOf(tally);
     return (
       <View style={[styles.cell, { width: `${100 / columns}%`, paddingHorizontal: columns > 1 ? spacing.xs : 0 }]}>
@@ -134,6 +138,14 @@ export default function CommunityScreen() {
               </Text>
               <Text style={styles.rowMeta}>{total ? `${total.toLocaleString()} vote${total === 1 ? "" : "s"}` : "No votes yet"}</Text>
             </View>
+            {rule ? (
+              <View style={[styles.mineTag, { backgroundColor: rule === "avoid" ? "rgba(251,113,133,0.14)" : "rgba(74,222,155,0.14)" }]}>
+                <Ionicons name="person" size={11} color={rule === "avoid" ? colors.negative : colors.positive} />
+                <Text style={[styles.mineText, { color: rule === "avoid" ? colors.negative : colors.positive }]}>
+                  {rule === "avoid" ? "Avoid" : "Support"}
+                </Text>
+              </View>
+            ) : null}
             {mine ? (
               <View style={styles.mineTag}>
                 <Ionicons name={mine === "up" ? "thumbs-up" : "thumbs-down"} size={11} color={colors.accent} />
@@ -154,6 +166,21 @@ export default function CommunityScreen() {
 
   const chips = (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+      {ruled.length > 0 || tab === "rules" ? (
+        <Pressable
+          onPress={() => {
+            hapticSelection();
+            setTab(tab === "rules" ? "all" : "rules");
+          }}
+          style={[styles.chip, tab === "rules" && styles.chipActive]}
+          accessibilityRole="button"
+          accessibilityState={{ selected: tab === "rules" }}
+          accessibilityLabel="Show only countries with my rules"
+        >
+          <Ionicons name="shield-checkmark-outline" size={14} color={tab === "rules" ? colors.bg : colors.subtext} />
+          <Text style={[styles.chipText, tab === "rules" && styles.chipTextActive]}>{`My rules · ${ruled.length}`}</Text>
+        </Pressable>
+      ) : null}
       {user ? (
         <Pressable
           onPress={() => {
@@ -232,11 +259,13 @@ export default function CommunityScreen() {
     <Text style={styles.loading}>Loading vote counts…</Text>
   ) : (
     <EmptyState
-      icon={tab === "mine" ? "thumbs-up-outline" : "search-outline"}
+      icon={tab === "mine" ? "thumbs-up-outline" : tab === "rules" ? "shield-checkmark-outline" : "search-outline"}
       text={
         search
           ? `No countries match “${search}”.`
-          : "You haven't voted yet. Open any country, or scan a product, to cast your first vote."
+          : tab === "rules"
+            ? "No personal rules yet. Open a country to mark it Avoid or Support."
+            : "You haven't voted yet. Open any country, or scan a product, to cast your first vote."
       }
     />
   );

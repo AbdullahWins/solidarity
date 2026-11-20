@@ -38,12 +38,15 @@ function dayLabel(key: string): string {
 const timeOf = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 
 function HistoryRow({ item, last }: { item: ScanRecord; last: boolean }) {
+  // A personal rule at scan time leads; otherwise the community verdict then.
+  const positive = item.rule ? item.rule === "support" : item.isPositive;
+  const label = item.rule ? (item.rule === "support" ? "Support" : "Avoid") : positive ? "Positive" : "Negative";
   return (
     <Pressable
       onPress={() => openCountry(item.country)}
       style={({ pressed }) => [styles.historyItem, !last && styles.divider, pressed && styles.pressed]}
       accessibilityRole="button"
-      accessibilityLabel={`${item.country}, ${item.isPositive ? "positive" : "negative"}, ${timeOf(item.scannedAt)}`}
+      accessibilityLabel={`${item.country}, ${item.rule ? `your rule: ${label}` : label.toLowerCase()}, ${timeOf(item.scannedAt)}`}
       accessibilityHint="Opens country details"
     >
       <Flag country={item.country} size={22} />
@@ -54,10 +57,9 @@ function HistoryRow({ item, last }: { item: ScanRecord; last: boolean }) {
         <Text style={styles.historyCode}>{item.code}</Text>
       </View>
       <View style={styles.historyRight}>
-        <View style={[styles.tonePill, { backgroundColor: item.isPositive ? "rgba(74,222,155,0.14)" : "rgba(251,113,133,0.14)" }]}>
-          <Text style={[styles.historyTone, { color: item.isPositive ? colors.positive : colors.negative }]}>
-            {item.isPositive ? "Positive" : "Negative"}
-          </Text>
+        <View style={[styles.tonePill, { backgroundColor: positive ? "rgba(74,222,155,0.14)" : "rgba(251,113,133,0.14)" }]}>
+          {item.rule ? <Ionicons name="person" size={10} color={positive ? colors.positive : colors.negative} /> : null}
+          <Text style={[styles.historyTone, { color: positive ? colors.positive : colors.negative }]}>{label}</Text>
         </View>
         <Text style={styles.historyTime}>{timeOf(item.scannedAt)}</Text>
       </View>
@@ -357,6 +359,9 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   tonePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
     borderRadius: radius.pill,
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,

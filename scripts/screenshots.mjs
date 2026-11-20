@@ -116,6 +116,7 @@ const seed = {
   "solidarity:v1:countryTalliesCache": JSON.stringify({ tallies, fetchedAt: now }),
   "solidarity:v1:myVotes": JSON.stringify(myVotes),
   "solidarity:v1:preferences": JSON.stringify({ hapticsEnabled: true, streakReminderEnabled: true }),
+  "solidarity:v1:countryRules": JSON.stringify({ portugal: "support" }),
 };
 
 // ---------------------------------------------------------------- capture plan
@@ -162,6 +163,7 @@ const SCREENS = [
   { id: "07-country", label: "Country details", path: "/country/Portugal" },
   { id: "08-profile", label: "Profile", path: "/profile" },
   { id: "09-settings", label: "Settings", path: "/settings" },
+  { id: "09b-rules", label: "My country rules", path: "/rules" },
   { id: "10-sign-in", label: "Sign in", path: "/auth" },
   {
     id: "11-create-account",
