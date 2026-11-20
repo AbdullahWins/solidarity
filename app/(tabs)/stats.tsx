@@ -1,12 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useMemo, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { ShareStatsButton } from "../../components/share/ShareStatsButton";
 import { Card } from "../../components/ui/Card";
 import { ContributionGraph } from "../../components/ui/ContributionGraph";
+import { Donut } from "../../components/ui/Donut";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { Flag } from "../../components/ui/Flag";
 import { Screen } from "../../components/ui/Screen";
 import { SectionHeader } from "../../components/ui/SectionHeader";
 import { StatTile } from "../../components/ui/StatTile";
@@ -14,19 +16,52 @@ import { colors, radius, spacing, typography } from "../../constants/theme";
 import { useLayout } from "../../hooks/useLayout";
 import { useScanHistory } from "../../hooks/useScanHistory";
 import { buildDailyCounts } from "../../lib/gamification";
+import { openCountry } from "../../lib/navigation";
+import type { ScanRecord } from "../../lib/types";
 
 const RECENT_LIMIT = 40;
 
-function relativeTime(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const min = Math.round(diff / 60000);
-  if (min < 1) return "Just now";
-  if (min < 60) return `${min} min ago`;
-  const hr = Math.round(min / 60);
-  if (hr < 24) return `${hr} h ago`;
-  const d = Math.round(hr / 24);
-  if (d < 7) return `${d} d ago`;
-  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+const dayKey = (iso: string) => new Date(iso).toLocaleDateString("en-CA");
+
+function dayLabel(key: string): string {
+  const today = new Date().toLocaleDateString("en-CA");
+  const y = new Date();
+  y.setDate(y.getDate() - 1);
+  if (key === today) return "Today";
+  if (key === y.toLocaleDateString("en-CA")) return "Yesterday";
+  const [yy, mm, dd] = key.split("-").map(Number);
+  return new Date(yy, mm - 1, dd).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+}
+
+const timeOf = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+
+function HistoryRow({ item, last }: { item: ScanRecord; last: boolean }) {
+  return (
+    <Pressable
+      onPress={() => openCountry(item.country)}
+      style={({ pressed }) => [styles.historyItem, !last && styles.divider, pressed && styles.pressed]}
+      accessibilityRole="button"
+      accessibilityLabel={`${item.country}, ${item.isPositive ? "positive" : "negative"}, ${timeOf(item.scannedAt)}`}
+      accessibilityHint="Opens country details"
+    >
+      <Flag country={item.country} size={22} />
+      <View style={styles.historyMain}>
+        <Text style={styles.historyCountry} numberOfLines={1}>
+          {item.country}
+        </Text>
+        <Text style={styles.historyCode}>{item.code}</Text>
+      </View>
+      <View style={styles.historyRight}>
+        <View style={[styles.tonePill, { backgroundColor: item.isPositive ? "rgba(74,222,155,0.14)" : "rgba(251,113,133,0.14)" }]}>
+          <Text style={[styles.historyTone, { color: item.isPositive ? colors.positive : colors.negative }]}>
+            {item.isPositive ? "Positive" : "Negative"}
+          </Text>
+        </View>
+        <Text style={styles.historyTime}>{timeOf(item.scannedAt)}</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={16} color={colors.muted} />
+    </Pressable>
+  );
 }
 
 export default function StatsScreen() {
@@ -49,25 +84,62 @@ export default function StatsScreen() {
     return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
   }, [scans]);
 
+  const groups = useMemo(() => {
+    const out: { key: string; items: ScanRecord[] }[] = [];
+    for (const s of scans.slice(0, RECENT_LIMIT)) {
+      const key = dayKey(s.scannedAt);
+      const last = out[out.length - 1];
+      if (last && last.key === key) last.items.push(s);
+      else out.push({ key, items: [s] });
+    }
+    return out;
+  }, [scans]);
+
+  const overview = (
+    <Card>
+      <SectionHeader title="Overview" caption={stats.total ? `${stats.total.toLocaleString()} scans in total` : undefined} />
+      <View style={styles.overview}>
+        <Donut
+          size={124}
+          segments={[
+            { value: stats.positive, color: colors.positive },
+            { value: stats.negative, color: colors.negative },
+          ]}
+          label={stats.total ? `${positiveShare}%` : "–"}
+          caption="positive"
+        />
+        <View style={styles.overviewStats}>
+          {[
+            { label: "Positive", value: stats.positive, color: colors.positive },
+            { label: "Negative", value: stats.negative, color: colors.negative },
+            { label: "Countries", value: new Set(scans.map((s) => s.country)).size, color: colors.accent },
+          ].map((row) => (
+            <View key={row.label} style={styles.overviewRow}>
+              <View style={[styles.legendDot, { backgroundColor: row.color }]} />
+              <Text style={styles.overviewLabel}>{row.label}</Text>
+              <Text style={styles.overviewValue}>{row.value.toLocaleString()}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+    </Card>
+  );
+
   const tiles = (
-    <View style={styles.tiles}>
-      <View style={styles.tileRow}>
-        <StatTile label="Total scans" value={stats.total} icon="scan" tone="accent" />
-        <StatTile label="Positive" value={stats.positive} icon="checkmark-circle" tone="positive" />
-        <StatTile label="Negative" value={stats.negative} icon="alert-circle" tone="negative" />
-      </View>
-      <View style={styles.tileRow}>
-        <StatTile label="Current streak" value={`${gamification.currentStreak}d`} icon="flame" tone="gold" />
-        <StatTile label="Longest streak" value={`${gamification.longestStreak}d`} icon="podium" tone="gold" />
-        <StatTile label="Positive share" value={`${positiveShare}%`} icon="pie-chart" />
-      </View>
+    <View style={styles.tileRow}>
+      <StatTile label="Current streak" value={`${gamification.currentStreak}d`} icon="flame" tone="gold" />
+      <StatTile label="Longest streak" value={`${gamification.longestStreak}d`} icon="podium" tone="gold" />
+      <StatTile label="Level" value={gamification.level} icon="star" tone="accent" />
     </View>
   );
 
   const recent = (
     <Card padded={false}>
-      <View style={styles.recentHeader}>
-        <SectionHeader title="Recent scans" caption={scans.length > RECENT_LIMIT ? `Latest ${RECENT_LIMIT} of ${scans.length}` : undefined} />
+      <View style={styles.cardHead}>
+        <SectionHeader
+          title="History"
+          caption={scans.length > RECENT_LIMIT ? `Latest ${RECENT_LIMIT} of ${scans.length.toLocaleString()}` : undefined}
+        />
       </View>
       {scans.length === 0 ? (
         <View style={styles.emptyWrap}>
@@ -80,54 +152,54 @@ export default function StatsScreen() {
           />
         </View>
       ) : (
-        scans.slice(0, RECENT_LIMIT).map((item, i) => (
-          <View
-            key={item.id}
-            style={[styles.historyItem, i < Math.min(scans.length, RECENT_LIMIT) - 1 && styles.divider]}
-            accessible
-            accessibilityLabel={`${item.country}, ${item.isPositive ? "positive" : "negative"}, ${relativeTime(item.scannedAt)}`}
-          >
-            <View style={[styles.dot, { backgroundColor: item.isPositive ? colors.positive : colors.negative }]} />
-            <View style={styles.historyMain}>
-              <Text style={styles.historyCountry} numberOfLines={1}>
-                {item.country}
-              </Text>
-              <Text style={styles.historyCode}>{item.code}</Text>
-            </View>
-            <View style={styles.historyRight}>
-              <Text style={[styles.historyTone, { color: item.isPositive ? colors.positive : colors.negative }]}>
-                {item.isPositive ? "Positive" : "Negative"}
-              </Text>
-              <Text style={styles.historyTime}>{relativeTime(item.scannedAt)}</Text>
-            </View>
+        groups.map((group) => (
+          <View key={group.key}>
+            <Text style={styles.dayLabel}>{dayLabel(group.key)}</Text>
+            {group.items.map((item, i) => (
+              <HistoryRow key={item.id} item={item} last={i === group.items.length - 1} />
+            ))}
           </View>
         ))
       )}
     </Card>
   );
 
-  const insights =
+  const top =
     topCountries.length > 0 ? (
-      <Card>
-        <SectionHeader title="Most scanned" />
-        {topCountries.map(([country, count]) => (
-          <View key={country} style={styles.topRow}>
-            <Text style={styles.topCountry} numberOfLines={1}>
-              {country}
-            </Text>
-            <View style={styles.topBarTrack}>
-              <View style={[styles.topBarFill, { width: `${(count / topCountries[0][1]) * 100}%` }]} />
+      <Card padded={false}>
+        <View style={styles.cardHead}>
+          <SectionHeader title="Most scanned" />
+        </View>
+        {topCountries.map(([country, count], i) => (
+          <Pressable
+            key={country}
+            onPress={() => openCountry(country)}
+            style={({ pressed }) => [styles.topRow, i < topCountries.length - 1 && styles.divider, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel={`${country}, ${count} scans`}
+          >
+            <Text style={styles.topRank}>{i + 1}</Text>
+            <Flag country={country} size={18} />
+            <View style={styles.topMain}>
+              <Text style={styles.topCountry} numberOfLines={1}>
+                {country}
+              </Text>
+              <View style={styles.topBarTrack}>
+                <View style={[styles.topBarFill, { width: `${(count / topCountries[0][1]) * 100}%` }]} />
+              </View>
             </View>
             <Text style={styles.topCount}>{count}</Text>
-          </View>
+          </Pressable>
         ))}
       </Card>
     ) : null;
 
+  const share = scans.length > 0 ? <ShareStatsButton scans={scans} gamification={gamification} stats={stats} /> : null;
+
   return (
     <Screen
       title="Stats"
-      subtitle="Your scanning activity, all stored on this device."
+      subtitle="Your activity. Stored only on this device."
       width={columns > 1 ? "wide" : "readable"}
       refreshing={refreshing}
       onRefresh={onRefresh}
@@ -140,17 +212,19 @@ export default function StatsScreen() {
       {columns > 1 ? (
         <View style={styles.split}>
           <View style={styles.splitCol}>
+            {overview}
             {tiles}
-            {scans.length > 0 && <ShareStatsButton scans={scans} gamification={gamification} stats={stats} />}
-            {insights}
+            {share}
+            {top}
           </View>
           <View style={styles.splitCol}>{recent}</View>
         </View>
       ) : (
         <>
+          {overview}
           {tiles}
-          {scans.length > 0 && <ShareStatsButton scans={scans} gamification={gamification} stats={stats} />}
-          {insights}
+          {share}
+          {top}
           {recent}
         </>
       )}
@@ -166,8 +240,34 @@ export default function StatsScreen() {
 }
 
 const styles = StyleSheet.create({
-  tiles: {
+  overview: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xl,
+  },
+  overviewStats: {
+    flex: 1,
+    gap: spacing.md,
+  },
+  overviewRow: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: spacing.sm,
+  },
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  overviewLabel: {
+    ...typography.body,
+    color: colors.subtext,
+    flex: 1,
+  },
+  overviewValue: {
+    ...typography.bodyStrong,
+    color: colors.text,
+    fontVariant: ["tabular-nums"],
   },
   tileRow: {
     flexDirection: "row",
@@ -182,7 +282,7 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: spacing.lg,
   },
-  recentHeader: {
+  cardHead: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
   },
@@ -190,21 +290,27 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     paddingTop: 0,
   },
+  dayLabel: {
+    ...typography.overline,
+    color: colors.muted,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xs,
+  },
   historyItem: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
+    minHeight: 60,
+  },
+  pressed: {
+    backgroundColor: colors.panel,
   },
   divider: {
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
   },
   historyMain: {
     flex: 1,
@@ -221,44 +327,60 @@ const styles = StyleSheet.create({
   },
   historyRight: {
     alignItems: "flex-end",
+    gap: 4,
+  },
+  tonePill: {
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
   },
   historyTone: {
     ...typography.caption,
+    fontSize: 11.5,
     fontWeight: "800",
   },
   historyTime: {
     ...typography.caption,
     color: colors.muted,
     fontWeight: "500",
-    marginTop: 2,
   },
   topRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
-    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  topRank: {
+    ...typography.caption,
+    color: colors.muted,
+    width: 14,
+    textAlign: "center",
+  },
+  topMain: {
+    flex: 1,
+    gap: 6,
   },
   topCountry: {
     ...typography.body,
+    fontWeight: "600",
     color: colors.text,
-    width: 120,
   },
   topBarTrack: {
-    flex: 1,
-    height: 8,
+    height: 6,
     borderRadius: radius.pill,
     backgroundColor: colors.panelStrong,
     overflow: "hidden",
   },
   topBarFill: {
-    height: 8,
+    height: 6,
     borderRadius: radius.pill,
     backgroundColor: colors.accent,
   },
   topCount: {
-    ...typography.caption,
-    color: colors.subtext,
-    width: 32,
+    ...typography.bodyStrong,
+    color: colors.text,
+    minWidth: 28,
     textAlign: "right",
     fontVariant: ["tabular-nums"],
   },
