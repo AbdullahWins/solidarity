@@ -1,0 +1,17 @@
+schema: spec-driven
+
+context: |
+  Solidarity: Expo SDK 58 (React Native 0.88, React 19.3, New Architecture) app with Expo Router
+  JS tabs and a custom adaptive tab bar (bottom bar on compact portrait, side rail on wide or
+  landscape). TypeScript strict. Local-first data in AsyncStorage; optional Firebase JS SDK 13
+  (Auth + Firestore) for accounts, voting and an opt-in leaderboard. Native folders are generated
+  by `expo prebuild` and gitignored, so native changes go in config plugins (plugins/) or app.json.
+  Dark-only design tokens in constants/theme.ts; responsive breakpoints in hooks/useLayout.ts.
+  Images go through expo-image. Firestore rules in firestore.rules must be deployed with any
+  data-model change. A static website in website/ holds the privacy policy, terms, support and
+  account-deletion pages and must stay consistent with what the app actually collects.
+  Verify with `npm run verify` (tsc, expo lint, jest) and `npx expo-doctor`.
+
+rules:
+  tasks:
+    - Every task states how it is verified
