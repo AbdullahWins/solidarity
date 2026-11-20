@@ -183,7 +183,15 @@ export default function OnboardingScreen() {
             accessibilityElementsHidden={i !== index}
             importantForAccessibility={i === index ? "auto" : "no-hide-descendants"}
           >
-            <View style={[styles.artWrap, landscape && { flex: 1, marginBottom: 0 }]}>{step.art}</View>
+            <View
+              style={[
+                styles.artWrap,
+                landscape && { flex: 1, marginBottom: 0 },
+                { transform: [{ scale: Math.min(width, height) >= 700 ? 1.35 : height < 500 ? 0.8 : 1 }] },
+              ]}
+            >
+              {step.art}
+            </View>
             <Animated.View
               key={`${step.key}-${index === i}`}
               entering={FadeInDown.duration(420)}
