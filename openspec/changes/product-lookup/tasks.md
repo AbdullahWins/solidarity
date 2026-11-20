@@ -8,7 +8,7 @@
 
 ## 2. Consent and UI
 
-- [x] 2.1 Add `preferences.productLookup`, the inline consent row on the result, and the Settings toggle. Verify that `useProductLookup` starts no request unless the choice is "on" (its effect returns early otherwise), and that the consent row renders on the first result.
+- [x] 2.1 Add `preferences.productLookup`, the inline consent row on the result, and the Settings toggle. Verify that `useProductLookup` starts no request unless the choice is "on" (its effect returns early otherwise). The consent row was not captured in screenshots (the demo seed has product names on).
 - [x] 2.2 Add `ProductRow` to the result: name, brand, `expo-image` thumbnail, the "Not the right product?" link and attribution, plus the not-found and unavailable states. Verify in demo mode with a mocked lookup for each state.
 - [x] 2.3 Show the product name in History rows, falling back to the country. Verify in the demo-mode screenshot.
 
