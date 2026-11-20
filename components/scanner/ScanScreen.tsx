@@ -3,7 +3,7 @@ import { useCameraPermissions, type BarcodeScanningResult } from "expo-camera";
 import * as Haptics from "expo-haptics";
 import { router, useIsFocused } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, Linking, Platform, StyleSheet, Text, View } from "react-native";
+import { Alert, Linking, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeIn, FadeInDown, FadeOutDown, LinearTransition } from "react-native-reanimated";
 
 import { colors, radius, spacing, typography } from "../../constants/theme";
@@ -16,12 +16,15 @@ import { parseBarcode } from "../../lib/gtin";
 import { hapticNotification } from "../../lib/haptics";
 import { countryForPrefix } from "../../lib/scan-logic";
 import type { ScanRecord } from "../../lib/types";
+import { openCountry } from "../../lib/navigation";
 import { isVotableCountry, type VoteChoice } from "../../lib/votes";
 import { LevelUpModal } from "../gamification/LevelUpModal";
 import { useBottomBarSpace } from "../navigation/AdaptiveTabBar";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
+import { Flag } from "../ui/Flag";
+import { PressableScale } from "../ui/PressableScale";
 import { Screen } from "../ui/Screen";
 import { TextField } from "../ui/TextField";
 import { VoteButtons } from "../voting/VoteButtons";
@@ -146,13 +149,7 @@ export function ScanScreen() {
 
   const camera = (() => {
     if (Platform.OS === "web") {
-      return (
-        <Card style={styles.permissionCard}>
-          <Ionicons name="desktop-outline" size={28} color={colors.accent} />
-          <Text style={styles.permissionTitle}>Camera scanning is available in the app</Text>
-          <Text style={styles.permissionText}>Type a barcode number below to look it up.</Text>
-        </Card>
-      );
+      return <Viewfinder active={false} preview scanning={scanning} height={cameraHeight} onScanned={() => {}} />;
     }
     if (!permission) {
       return <View style={[styles.cameraSkeleton, { height: cameraHeight }]} />;
@@ -218,7 +215,10 @@ export function ScanScreen() {
           <Animated.View entering={FadeInDown.springify().damping(18)} layout={LinearTransition}>
             <Card tone={verdict === null ? "default" : verdict ? "positive" : "negative"}>
               <View style={styles.resultTop}>
-                <Text style={styles.overline}>Registered in</Text>
+                <View style={styles.resultFlagRow}>
+                  <Flag country={record.country} size={22} />
+                  <Text style={styles.overline}>Registered in</Text>
+                </View>
                 {verdict !== null ? (
                   <View style={[styles.verdict, { backgroundColor: verdict ? "rgba(74,222,155,0.16)" : "rgba(251,113,133,0.16)" }]}>
                     <Ionicons
@@ -263,12 +263,23 @@ export function ScanScreen() {
               <Text style={styles.disclaimer}>
                 {"Shows where the barcode was registered, which isn't always where the product was made."}
               </Text>
-              <Button label="Scan another" icon="scan" variant="secondary" onPress={scanAgain} style={styles.again} />
+              <View style={styles.resultActions}>
+                <Button label="Scan another" icon="scan" variant="secondary" onPress={scanAgain} style={styles.flex} />
+                <Button
+                  label="Details"
+                  icon="chevron-forward"
+                  onPress={() => openCountry(record.country)}
+                  style={styles.flex}
+                  accessibilityHint={`Opens ${record.country}`}
+                />
+              </View>
             </Card>
           </Animated.View>
         );
       })()
-    : (
+    : scans.length > 0
+      ? null
+      : (
         <Animated.View entering={FadeIn}>
           <Card>
             <Text style={styles.cardTitle}>How it works</Text>
@@ -291,6 +302,43 @@ export function ScanScreen() {
         </Animated.View>
       );
 
+  // Latest scan per country, newest first.
+  const recentScans = (() => {
+    const seen = new Set<string>();
+    return scans.filter((s) => (seen.has(s.country) ? false : (seen.add(s.country), true))).slice(0, 8);
+  })();
+
+  const recent =
+    recentScans.length > 0 ? (
+      <View style={styles.recent}>
+        <View style={styles.recentHead}>
+          <Text style={styles.cardTitle}>Recent</Text>
+          <Text style={styles.recentCaption}>Tap to see details</Text>
+        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.recentRow}
+          style={styles.recentScroller}
+        >
+          {recentScans.map((s) => (
+            <PressableScale
+              key={s.id}
+              onPress={() => openCountry(s.country)}
+              accessibilityLabel={`${s.country}, ${s.isPositive ? "positive" : "negative"}`}
+              style={styles.recentChip}
+            >
+              <Flag country={s.country} size={18} />
+              <Text style={styles.recentText} numberOfLines={1}>
+                {s.country}
+              </Text>
+              <View style={[styles.recentDot, { backgroundColor: s.isPositive ? colors.positive : colors.negative }]} />
+            </PressableScale>
+          ))}
+        </ScrollView>
+      </View>
+    ) : null;
+
   const newBadges = (toast?.badgeIds ?? [])
     .map((id) => badgeDefinitions.find((b) => b.id === id))
     .filter((b): b is NonNullable<typeof b> => !!b);
@@ -310,6 +358,7 @@ export function ScanScreen() {
             <View style={styles.paneRight}>
               {result}
               {manual}
+              {recent}
             </View>
           </View>
         ) : (
@@ -317,6 +366,7 @@ export function ScanScreen() {
             {camera}
             {result}
             {manual}
+            {recent}
           </>
         )}
 
@@ -487,8 +537,61 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     marginTop: spacing.md,
   },
-  again: {
+  resultFlagRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  resultActions: {
+    flexDirection: "row",
+    gap: spacing.sm,
     marginTop: spacing.md,
+  },
+  flex: {
+    flex: 1,
+  },
+  recent: {
+    gap: spacing.sm,
+  },
+  recentHead: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.xs,
+  },
+  recentCaption: {
+    ...typography.caption,
+    color: colors.muted,
+  },
+  recentScroller: {
+    marginHorizontal: -spacing.xs,
+  },
+  recentRow: {
+    gap: spacing.sm,
+    paddingHorizontal: spacing.xs,
+  },
+  recentChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    minHeight: 44,
+    paddingLeft: spacing.sm + 2,
+    paddingRight: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderStrong,
+    maxWidth: 220,
+  },
+  recentText: {
+    ...typography.caption,
+    color: colors.text,
+    flexShrink: 1,
+  },
+  recentDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   step: {
     flexDirection: "row",

@@ -1,14 +1,15 @@
 import { Ionicons } from "@expo/vector-icons";
 import { CameraView, type BarcodeScanningResult } from "expo-camera";
+import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Animated, {
   Easing,
+  cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
   withTiming,
-  cancelAnimation,
 } from "react-native-reanimated";
 
 import { colors, radius, spacing, typography } from "../../constants/theme";
@@ -19,39 +20,70 @@ type Props = {
   scanning: boolean;
   height: number;
   onScanned: (result: BarcodeScanningResult) => void;
+  /** Web: decorative viewfinder with a sample barcode instead of the camera. */
+  preview?: boolean;
 };
 
 const BARCODE_TYPES = ["ean13", "ean8", "upc_a", "upc_e"] as const;
+
+// Bar widths for the decorative sample barcode (preview mode).
+const BARS = [3, 1, 2, 1, 1, 3, 2, 1, 1, 2, 3, 1, 2, 2, 1, 1, 3, 1, 2, 1, 1, 2, 3, 1, 1, 2, 1, 3, 1, 2];
+
+function SampleBarcode() {
+  return (
+    <View style={styles.sample} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <View style={styles.sampleBars}>
+        {BARS.map((w, i) => (
+          <View key={i} style={{ width: w * 2.2, marginRight: i % 2 ? 2.2 : 1.4, backgroundColor: "#15171C" }} />
+        ))}
+      </View>
+      <Text style={styles.sampleDigits}>5 601234 567892</Text>
+    </View>
+  );
+}
 
 function Corner({ style }: { style: object }) {
   return <View style={[styles.corner, style]} />;
 }
 
 /** Camera preview with animated scan line, corner guides and torch toggle. */
-export function Viewfinder({ active, scanning, height, onScanned }: Props) {
+export function Viewfinder({ active, scanning, height, onScanned, preview }: Props) {
   const [torch, setTorch] = useState(false);
   const [mountError, setMountError] = useState<string | null>(null);
   const line = useSharedValue(0);
+  const animate = (active || !!preview) && scanning;
 
   useEffect(() => {
-    if (active && scanning) {
-      line.value = 0;
-      line.value = withRepeat(withTiming(1, { duration: 1800, easing: Easing.inOut(Easing.quad) }), -1, true);
+    if (animate) {
+      line.set(0);
+      line.set(withRepeat(withTiming(1, { duration: 1800, easing: Easing.inOut(Easing.quad) }), -1, true));
     } else {
       cancelAnimation(line);
     }
     return () => cancelAnimation(line);
-  }, [active, scanning, line]);
+  }, [animate, line]);
 
   const windowHeight = Math.min(height * 0.62, 220);
   const lineStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: line.value * (windowHeight - 4) }],
+    transform: [{ translateY: line.get() * (windowHeight - 4) }],
     opacity: scanning ? 1 : 0,
   }));
 
+  const statusText = preview ? "Camera scanning works in the app" : scanning ? "Point at a barcode" : "Captured";
+
   return (
     <View style={[styles.frame, { height }]}>
-      {active && !mountError ? (
+      {preview ? (
+        <View style={[StyleSheet.absoluteFill, styles.center]}>
+          <LinearGradient
+            colors={["#2D323D", "#181B22", "#0C0E12"]}
+            start={{ x: 0.2, y: 0 }}
+            end={{ x: 0.8, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+          <SampleBarcode />
+        </View>
+      ) : active && !mountError ? (
         <CameraView
           style={StyleSheet.absoluteFill}
           facing="back"
@@ -88,15 +120,15 @@ export function Viewfinder({ active, scanning, height, onScanned }: Props) {
       <View style={styles.topBar} pointerEvents="box-none">
         <View style={styles.statusChip}>
           <View style={[styles.statusDot, { backgroundColor: scanning ? colors.positive : colors.gold }]} />
-          <Text style={styles.statusText}>{scanning ? "Point at a barcode" : "Captured"}</Text>
+          <Text style={styles.statusText}>{statusText}</Text>
         </View>
-        {active && !mountError ? (
+        {active && !mountError && !preview ? (
           <IconButton
             icon={torch ? "flashlight" : "flashlight-outline"}
             onPress={() => setTorch((v) => !v)}
             accessibilityLabel={torch ? "Turn torch off" : "Turn torch on"}
             active={torch}
-            size={40}
+            size={44}
             style={styles.torch}
           />
         ) : null}
@@ -105,7 +137,7 @@ export function Viewfinder({ active, scanning, height, onScanned }: Props) {
   );
 }
 
-const CORNER = 26;
+const CORNER = 28;
 const THICK = 3.5;
 
 const styles = StyleSheet.create({
@@ -115,6 +147,33 @@ const styles = StyleSheet.create({
     backgroundColor: "#000",
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderStrong,
+  },
+  center: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sample: {
+    backgroundColor: "#F4F1EA",
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 6,
+    alignItems: "center",
+    transform: [{ rotate: "-3deg" }],
+    shadowColor: "#000",
+    shadowOpacity: 0.55,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+  },
+  sampleBars: {
+    flexDirection: "row",
+    height: 58,
+  },
+  sampleDigits: {
+    ...typography.mono,
+    color: "#15171C",
+    letterSpacing: 2,
+    marginTop: 4,
   },
   placeholder: {
     alignItems: "center",
@@ -132,7 +191,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.18)",
+    backgroundColor: "rgba(0, 0, 0, 0.16)",
   },
   window: {
     width: "78%",
@@ -144,10 +203,10 @@ const styles = StyleSheet.create({
     height: CORNER,
     borderColor: "#FFFFFF",
   },
-  tl: { top: 0, left: 0, borderTopWidth: THICK, borderLeftWidth: THICK, borderTopLeftRadius: 12 },
-  tr: { top: 0, right: 0, borderTopWidth: THICK, borderRightWidth: THICK, borderTopRightRadius: 12 },
-  bl: { bottom: 0, left: 0, borderBottomWidth: THICK, borderLeftWidth: THICK, borderBottomLeftRadius: 12 },
-  br: { bottom: 0, right: 0, borderBottomWidth: THICK, borderRightWidth: THICK, borderBottomRightRadius: 12 },
+  tl: { top: 0, left: 0, borderTopWidth: THICK, borderLeftWidth: THICK, borderTopLeftRadius: 14 },
+  tr: { top: 0, right: 0, borderTopWidth: THICK, borderRightWidth: THICK, borderTopRightRadius: 14 },
+  bl: { bottom: 0, left: 0, borderBottomWidth: THICK, borderLeftWidth: THICK, borderBottomLeftRadius: 14 },
+  br: { bottom: 0, right: 0, borderBottomWidth: THICK, borderRightWidth: THICK, borderBottomRightRadius: 14 },
   line: {
     position: "absolute",
     left: 10,
@@ -173,7 +232,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.xs + 2,
-    backgroundColor: "rgba(7, 8, 11, 0.72)",
+    backgroundColor: "rgba(7, 8, 11, 0.74)",
     borderRadius: radius.pill,
     paddingHorizontal: spacing.md,
     paddingVertical: 7,
@@ -188,6 +247,6 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   torch: {
-    backgroundColor: "rgba(7, 8, 11, 0.72)",
+    backgroundColor: "rgba(7, 8, 11, 0.74)",
   },
 });
