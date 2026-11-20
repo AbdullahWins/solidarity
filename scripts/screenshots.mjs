@@ -22,7 +22,7 @@ const skipBuild = process.argv.includes("--skip-build");
 // ---------------------------------------------------------------- build
 if (!skipBuild) {
   console.log("Building web export…");
-  const r = spawnSync("npx", ["expo", "export", "--platform", "web", "--output-dir", "dist"], {
+  const r = spawnSync("npx", ["expo", "export", "--platform", "web", "--output-dir", "dist", "--clear"], {
     cwd: root,
     stdio: "inherit",
     shell: true,
