@@ -233,6 +233,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     marginHorizontal: -spacing.xs,
+    // Cells are 50% wide with their own padding; a column gap would wrap them.
+    columnGap: 0,
     rowGap: spacing.sm,
   },
   gridCell: {
