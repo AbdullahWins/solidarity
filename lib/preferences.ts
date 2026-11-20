@@ -5,12 +5,15 @@ export type Preferences = {
   streakReminderEnabled: boolean;
   /** History: whether the "More stats" section is expanded. */
   historyMoreStatsOpen: boolean;
+  /** Product names from Open Food Facts. "unset" until the user chooses. */
+  productLookup: "unset" | "on" | "off";
 };
 
 export const DEFAULT_PREFERENCES: Preferences = {
   hapticsEnabled: true,
   streakReminderEnabled: false,
   historyMoreStatsOpen: false,
+  productLookup: "unset",
 };
 
 const KEY = "solidarity:v1:preferences";

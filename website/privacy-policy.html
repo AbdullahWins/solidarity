@@ -42,6 +42,7 @@
           <strong>The short version</strong>
           <ul>
             <li><strong>No account? Nothing is collected.</strong> Scanning works fully offline, and your scan history never leaves your device.</li>
+            <li><strong>Product names are optional and off by default.</strong> If you turn them on, only the barcode number is sent to Open Food Facts, a free, open product database, to look the product up.</li>
             <li><strong>With an optional account</strong> we store your email, display name, a summary of your progress and your votes, using Google Firebase.</li>
             <li><strong>We don't sell or share your data</strong>, show ads, or use analytics or tracking.</li>
             <li><strong>You can delete your account</strong> and all its cloud data in the app at any time (Profile &rarr; Delete account).</li>
@@ -88,6 +89,7 @@
           <thead><tr><th>Data</th><th>Where</th><th>Leaves your device?</th></tr></thead>
           <tbody>
 <tr><td data-label="Data">Scan history: barcode numbers, country, time, camera or typed</td><td data-label="Where">On your device only</td><td data-label="Leaves your device?">No, never</td></tr>
+<tr><td data-label="Data">Barcode numbers, if you turn on <strong>Product names</strong> (off by default)</td><td data-label="Where">Sent to Open Food Facts to look up the product name, brand and photo. Results are cached on your device</td><td data-label="Leaves your device?">Only the barcode number, sent directly to Open Food Facts. Nothing else, and never to us</td></tr>
 <tr><td data-label="Data">Camera images</td><td data-label="Where">Processed in memory to read the barcode</td><td data-label="Leaves your device?">No. Images are not saved or uploaded</td></tr>
 <tr><td data-label="Data">Your country rules (countries you mark Avoid or Support)</td><td data-label="Where">On your device only</td><td data-label="Leaves your device?">No. Not included in your account backup</td></tr>
 <tr><td data-label="Data">Settings (haptics, reminders), cached vote counts</td><td data-label="Where">On your device only</td><td data-label="Leaves your device?">No</td></tr>
@@ -101,6 +103,7 @@
         <h2 id="use">5. How we use it, and our legal basis</h2>
         <ul>
           <li><strong>Providing your account, backup, votes and leaderboard</strong>: needed to provide the service you asked for (contract).</li>
+          <li><strong>Looking up product names</strong>: your consent, given by turning on Product names. Turn it off at any time.</li>
           <li><strong>Showing you on the public leaderboard</strong>: your consent, given by turning on the leaderboard switch. Turn it off at any time.</li>
           <li><strong>Keeping the service secure and preventing abuse</strong>: our legitimate interest in running a reliable, fair service.</li>
         </ul>
@@ -116,6 +119,7 @@
           <li><strong>Only you</strong> can read your progress backup and your individual votes. Our database security rules enforce this.</li>
           <li><strong>Older app versions:</strong> until everyone has updated past version 1.0.2, other signed-in users of those old versions can also read the progress backup (activity counts and vote choices) of users who have opted in to the leaderboard. Turning the leaderboard off removes this.</li>
           <li><strong>Service providers</strong>: Google Firebase, as described above.</li>
+          <li><strong>Open Food Facts</strong>, only if you turn on Product names: the app sends the barcode number straight from your device to Open Food Facts, an independent non-profit open database, which also sees your IP address as with any web request. We don't send it your account, location or scan history. See the <a href="https://world.openfoodfacts.org/privacy">Open Food Facts privacy policy</a>. Turn it off in <strong>Settings &rarr; Product names</strong>.</li>
           <li><strong>Legal requests</strong>: we may disclose data if the law requires it.</li>
         </ul>
         <p>We never sell your personal data, and we don't share it for advertising.</p>

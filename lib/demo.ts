@@ -37,3 +37,9 @@ export const DEMO_LEADERBOARD: LeaderboardEntry[] = [
   { uid: "u7", displayName: "Oskar", xp: 1320, level: 5, currentStreak: 2, longestStreak: 7 },
   { uid: "u8", displayName: "Fatima Z.", xp: 960, level: 4, currentStreak: 1, longestStreak: 5 },
 ];
+
+/** Product details shown for the screenshot script's typed codes (no network). */
+export const DEMO_PRODUCTS: Record<string, { name: string; brand: string }> = {
+  "5601234567892": { name: "Extra virgin olive oil 750 ml", brand: "Quinta Demo" },
+  "4006381333931": { name: "Textmarker highlighter, yellow", brand: "Stabilo" },
+};

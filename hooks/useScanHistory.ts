@@ -11,6 +11,7 @@ import {
   getGamificationState,
   getScans,
   saveGamificationState,
+  updateScan as persistScanUpdate,
 } from "../lib/storage";
 import { DEFAULT_GAMIFICATION_STATE, type GamificationState, type ScanRecord } from "../lib/types";
 
@@ -96,6 +97,13 @@ export function useScanHistory() {
     [gamification]
   );
 
+  const updateScan = useCallback(
+    async (id: string, patch: Partial<Pick<ScanRecord, "productName" | "brand">>) => {
+      setScans(await persistScanUpdate(id, patch));
+    },
+    []
+  );
+
   const clearHistory = useCallback(async () => {
     await clearScans();
     // Recompute (don't hard-reset) gamification: computeGamificationState
@@ -124,6 +132,7 @@ export function useScanHistory() {
     gamification,
     stats,
     addScan,
+    updateScan,
     clearHistory,
     loading,
     applyGamificationState,

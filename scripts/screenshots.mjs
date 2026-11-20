@@ -67,6 +67,13 @@ const SAMPLE = [
   ["500", "United Kingdom", true], ["300", "France", true], ["789", "Brazil", false], ["840", "Spain", true],
   ["880", "South Korea", true], ["870", "Netherlands", true], ["625", "Jordan", true], ["460", "Russia", false],
 ];
+// A few scans carry product names, as they would with product names on.
+const PRODUCTS = [
+  { productName: "Sparkling mineral water 1 l", brand: "Demo Springs" },
+  { productName: "Dark chocolate 70%", brand: "Cacao Demo" },
+  { productName: "Wholegrain crackers", brand: "Field & Oven" },
+  { productName: "Green tea, 20 bags", brand: "Leaf Demo" },
+];
 const now = Date.now();
 const DAY = 86400000;
 const scans = [];
@@ -83,6 +90,7 @@ for (let d = 0; d < 70; d++) {
       isPositive: positive,
       source: k % 3 === 0 ? "manual" : "camera",
       scannedAt: at.toISOString(),
+      ...(PRODUCTS[n % 3 === 1 ? (n / 3) | 0 : -1] ?? {}),
     });
   }
 }
@@ -115,7 +123,7 @@ const seed = {
   "solidarity:v1:gamification": JSON.stringify(gamification),
   "solidarity:v1:countryTalliesCache": JSON.stringify({ tallies, fetchedAt: now }),
   "solidarity:v1:myVotes": JSON.stringify(myVotes),
-  "solidarity:v1:preferences": JSON.stringify({ hapticsEnabled: true, streakReminderEnabled: true }),
+  "solidarity:v1:preferences": JSON.stringify({ hapticsEnabled: true, streakReminderEnabled: true, productLookup: "on" }),
   "solidarity:v1:countryRules": JSON.stringify({ portugal: "support" }),
 };
 

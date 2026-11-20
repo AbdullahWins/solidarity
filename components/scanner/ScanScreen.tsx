@@ -11,6 +11,8 @@ import { colors, radius, spacing, typography } from "../../constants/theme";
 import { useCloudSync } from "../../hooks/useCloudSync";
 import { useCountryRules } from "../../hooks/useCountryRules";
 import { useCountryVotes } from "../../hooks/useCountryVotes";
+import { usePreferences } from "../../hooks/usePreferences";
+import { useProductLookup } from "../../hooks/useProductLookup";
 import { useLayout } from "../../hooks/useLayout";
 import { useScanHistory } from "../../hooks/useScanHistory";
 import { badgeDefinitions } from "../../lib/badges";
@@ -31,6 +33,7 @@ import { Flag } from "../ui/Flag";
 import { Screen } from "../ui/Screen";
 import { TextField } from "../ui/TextField";
 import { VoteButtons } from "../voting/VoteButtons";
+import { ProductRow } from "./ProductRow";
 import { Viewfinder } from "./Viewfinder";
 
 const KIND_LABEL: Record<string, string> = {
@@ -45,7 +48,7 @@ export function ScanScreen() {
   const isFocused = useIsFocused();
   const layout = useLayout();
   const insets = useSafeAreaInsets();
-  const { scans, gamification, addScan, applyGamificationState, reload } = useScanHistory();
+  const { scans, gamification, addScan, updateScan, applyGamificationState, reload } = useScanHistory();
   useCloudSync(scans, gamification);
   const { getTally, getVerdict, myVote, castVote, reload: reloadVotes } = useCountryVotes(
     scans,
@@ -53,6 +56,7 @@ export function ScanScreen() {
     applyGamificationState
   );
   const rules = useCountryRules();
+  const { preferences, update: updatePreferences } = usePreferences();
   const [permission, requestPermission] = useCameraPermissions();
 
   const [manualCode, setManualCode] = useState("");
@@ -73,6 +77,11 @@ export function ScanScreen() {
     const t = setTimeout(() => setToast(null), 3200);
     return () => clearTimeout(t);
   }, [toast]);
+
+  const latestRecord = latest?.record ?? null;
+  const product = useProductLookup(latestRecord?.code ?? null, preferences.productLookup === "on", (found) => {
+    if (latestRecord) void updateScan(latestRecord.id, { productName: found.product.name, brand: found.product.brand });
+  });
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -270,6 +279,14 @@ export function ScanScreen() {
                   {record.country}
                 </Text>
               </View>
+              {isVotableCountry(record.country) ? (
+                <ProductRow
+                  code={record.code}
+                  consent={preferences.productLookup}
+                  state={product}
+                  onConsent={(on) => void updatePreferences({ productLookup: on ? "on" : "off" })}
+                />
+              ) : null}
               <View style={styles.verdictRow} accessibilityRole="header">
                 <Ionicons
                   name={verdict === null ? "help-circle" : verdict ? "checkmark-circle" : "alert-circle"}

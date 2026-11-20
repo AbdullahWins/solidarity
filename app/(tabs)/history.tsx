@@ -46,15 +46,21 @@ function HistoryRow({ item, last }: { item: ScanRecord; last: boolean }) {
       onPress={() => openCountry(item.country)}
       style={({ pressed }) => [styles.historyItem, !last && styles.divider, pressed && styles.pressed]}
       accessibilityRole="button"
-      accessibilityLabel={`${item.country}, ${item.rule ? `your rule: ${label}` : label.toLowerCase()}, ${timeOf(item.scannedAt)}`}
+      accessibilityLabel={`${item.productName ? `${item.productName}, ` : ""}${item.country}, ${item.rule ? `your rule: ${label}` : label.toLowerCase()}, ${timeOf(item.scannedAt)}`}
       accessibilityHint="Opens country details"
     >
       <Flag country={item.country} size={22} />
       <View style={styles.historyMain}>
         <Text style={styles.historyCountry} numberOfLines={1}>
-          {item.country}
+          {item.productName ?? item.country}
         </Text>
-        <Text style={styles.historyCode}>{item.code}</Text>
+        {item.productName ? (
+          <Text style={styles.historySub} numberOfLines={1}>
+            {[item.brand, item.country].filter(Boolean).join(" · ")}
+          </Text>
+        ) : (
+          <Text style={styles.historyCode}>{item.code}</Text>
+        )}
       </View>
       <View style={styles.historyRight}>
         <View style={[styles.tonePill, { backgroundColor: positive ? "rgba(74,222,155,0.14)" : "rgba(251,113,133,0.14)" }]}>
@@ -352,6 +358,11 @@ const styles = StyleSheet.create({
     ...typography.mono,
     fontSize: 12,
     color: colors.muted,
+    marginTop: 2,
+  },
+  historySub: {
+    ...typography.caption,
+    color: colors.subtext,
     marginTop: 2,
   },
   historyRight: {

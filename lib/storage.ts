@@ -39,6 +39,17 @@ export async function addScan(record: ScanRecord): Promise<ScanRecord[]> {
   return next;
 }
 
+/** Patches one stored scan (e.g. product details that arrive after the scan). */
+export async function updateScan(
+  id: string,
+  patch: Partial<Pick<ScanRecord, "productName" | "brand">>
+): Promise<ScanRecord[]> {
+  const current = await getScans();
+  const next = current.map((s) => (s.id === id ? { ...s, ...patch } : s));
+  await AsyncStorage.setItem(KEYS.scans, JSON.stringify(next));
+  return next;
+}
+
 export async function clearScans(): Promise<void> {
   await AsyncStorage.removeItem(KEYS.scans);
 }

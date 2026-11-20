@@ -86,6 +86,16 @@ export default function SettingsScreen() {
         subtitle="Vibrate on scans, votes and level-ups"
         toggle={{ value: preferences.hapticsEnabled, onChange: (v) => update({ hapticsEnabled: v }) }}
       />
+      <ListRow
+        icon="pricetag-outline"
+        label="Product names"
+        subtitle="From Open Food Facts. Sends only the barcode."
+        toggle={{
+          value: preferences.productLookup === "on",
+          onChange: (v) => update({ productLookup: v ? "on" : "off" }),
+        }}
+        last={Platform.OS === "web"}
+      />
       {Platform.OS !== "web" ? (
         <ListRow
           icon="notifications-outline"

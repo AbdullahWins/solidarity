@@ -64,3 +64,8 @@ Download Solidarity today and start making informed choices, backed by a transpa
 - Encrypted in transit: Yes. Users can request deletion: Yes (in app and via the URL above).
 - Not collected: location, contacts, photos/videos (write-only save), device or advertising IDs.
 - Data shared with third parties: No (Firebase is a service provider). No ads.
+- Product names (from 1.2, off by default): with the user's opt-in, the app sends the scanned
+  barcode number directly to Open Food Facts. A barcode identifies a product, not the user, and
+  the transfer is user-initiated after an in-app explanation. That fits Google's exemption for
+  sharing the user expects, but review this answer before each release. If in doubt, declare
+  "App activity → Other actions" as shared, for App functionality, optional.

@@ -7,6 +7,9 @@ export type ScanRecord = {
   scannedAt: string; // ISO 8601, UTC
   /** The user's personal rule for this country at scan time, if any. */
   rule?: "avoid" | "support";
+  /** From Open Food Facts, when product names are on and it was found. */
+  productName?: string;
+  brand?: string;
 };
 
 export type GamificationState = {
