@@ -65,7 +65,8 @@ function HistoryRow({ item, last }: { item: ScanRecord; last: boolean }) {
   const tone = toneOf(item);
   const toneColor = tone === "fine" ? colors.positive : tone === "avoid" ? colors.negative : colors.subtext;
   const toneBg = tone === "fine" ? "rgba(74,222,155,0.14)" : tone === "avoid" ? "rgba(251,113,133,0.14)" : colors.panel;
-  const label = item.rule ? (item.rule === "support" ? "Support" : "Avoid") : tone === "fine" ? "Fine" : tone === "avoid" ? "Avoid" : "Neutral";
+  const personal = item.brandRule?.rule ?? item.rule;
+  const label = personal ? (personal === "support" ? "Support" : "Avoid") : tone === "fine" ? "Fine" : tone === "avoid" ? "Avoid" : "Neutral";
   return (
     <Pressable
       onPress={() => openCountry(item.country)}
@@ -89,7 +90,7 @@ function HistoryRow({ item, last }: { item: ScanRecord; last: boolean }) {
       </View>
       <View style={styles.historyRight}>
         <View style={[styles.tonePill, { backgroundColor: toneBg }]}>
-          {item.rule ? <Ionicons name="person" size={10} color={toneColor} /> : null}
+          {personal ? <Ionicons name="person" size={10} color={toneColor} /> : null}
           <Text style={[styles.historyTone, { color: toneColor }]}>{label}</Text>
         </View>
         <Text style={styles.historyTime}>{timeOf(item.scannedAt)}</Text>

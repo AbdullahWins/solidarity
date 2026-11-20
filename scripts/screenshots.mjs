@@ -125,6 +125,7 @@ const seed = {
   "solidarity:v1:myVotes": JSON.stringify(myVotes),
   "solidarity:v1:preferences": JSON.stringify({ hapticsEnabled: true, streakReminderEnabled: true, productLookup: "on" }),
   "solidarity:v1:countryRules": JSON.stringify({ portugal: "support" }),
+  "solidarity:v1:brandRules": JSON.stringify({ "schwan-stabilo-group": { rule: "support", label: "Schwan-Stabilo Group" } }),
   // A basket from earlier today (basket mode off, so the Scan screens stay normal).
   "solidarity:v1:basket": JSON.stringify({
     active: false,

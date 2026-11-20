@@ -94,3 +94,23 @@ test("owner and categories survive a backup; bad categories are rejected", () =>
   f.scans[0].categories = ["<b>"];
   expect(() => parseBackup(JSON.stringify(f))).toThrow(/damaged/);
 });
+
+test("brand rules round-trip; older files without them still import", () => {
+  const withBrands = JSON.parse(
+    JSON.stringify(
+      buildBackup({
+        scans: sourceScans,
+        gamification: sourceState,
+        rules: {},
+        brandRules: { nestle: { rule: "avoid", label: "Nestlé" } },
+        preferences: DEFAULT_PREFERENCES,
+      })
+    )
+  );
+  expect(parseBackup(JSON.stringify(withBrands)).brandRules).toEqual({ nestle: { rule: "avoid", label: "Nestlé" } });
+  const old = JSON.parse(file());
+  delete old.brandRules;
+  expect(parseBackup(JSON.stringify(old)).brandRules).toEqual({});
+  withBrands.brandRules = { nestle: { rule: "avoid", label: "" } };
+  expect(() => parseBackup(JSON.stringify(withBrands))).toThrow(/damaged/);
+});

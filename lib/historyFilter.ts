@@ -8,8 +8,9 @@ export type HistoryFilter = { query: string; tone: ToneFilter; period: PeriodFil
 
 export const NO_FILTER: HistoryFilter = { query: "", tone: "all", period: "all" };
 
-/** How a past scan reads now: its rule at scan time, else the community verdict then. */
+/** How a past scan reads: its brand rule, then country rule at scan time, else the community verdict then. */
 export function toneOf(scan: ScanRecord): Exclude<ToneFilter, "all"> {
+  if (scan.brandRule) return scan.brandRule.rule === "support" ? "fine" : "avoid";
   if (!isVotableCountry(scan.country)) return "neutral";
   if (scan.rule) return scan.rule === "support" ? "fine" : "avoid";
   return scan.isPositive ? "fine" : "avoid";

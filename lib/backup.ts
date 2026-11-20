@@ -1,3 +1,4 @@
+import { isValidBrandRuleKey, type BrandRuleEntry } from "./brandRules";
 import { computeGamificationState } from "./gamification";
 import type { Preferences } from "./preferences";
 import { DEFAULT_GAMIFICATION_STATE, type GamificationState, type ScanRecord } from "./types";
@@ -23,6 +24,8 @@ export type Backup = {
   scans: ScanRecord[];
   gamification: Pick<GamificationState, "voteXp" | "voteCount" | "badgeUnlockedAt">;
   rules: Record<string, Rule>;
+  /** Brand and company rules (added in 1.2; optional so older files still import). */
+  brandRules: Record<string, BrandRuleEntry>;
   preferences: Partial<Preferences>;
 };
 
@@ -32,6 +35,7 @@ export function buildBackup(input: {
   scans: ScanRecord[];
   gamification: GamificationState;
   rules: Record<string, Rule>;
+  brandRules?: Record<string, BrandRuleEntry>;
   preferences: Preferences;
   now?: Date;
 }): Backup {
@@ -46,6 +50,7 @@ export function buildBackup(input: {
       badgeUnlockedAt: input.gamification.badgeUnlockedAt,
     },
     rules: input.rules,
+    brandRules: input.brandRules ?? {},
     preferences: input.preferences,
   };
 }
@@ -73,6 +78,10 @@ function validScan(v: unknown): v is ScanRecord {
     (s.productName === undefined || (isString(s.productName) && s.productName.length <= 200)) &&
     (s.brand === undefined || (isString(s.brand) && s.brand.length <= 200)) &&
     (s.owner === undefined || (isString(s.owner) && s.owner.length <= 200)) &&
+    (s.brandRule === undefined ||
+      ((s.brandRule.rule === "avoid" || s.brandRule.rule === "support") &&
+        isString(s.brandRule.target) &&
+        s.brandRule.target.length <= 200)) &&
     (s.categories === undefined ||
       (Array.isArray(s.categories) &&
         s.categories.length <= 5 &&
@@ -98,6 +107,21 @@ export function parseBackup(text: string, sizeBytes = text.length): Backup {
   }
   const g = data.gamification ?? ({} as Backup["gamification"]);
   const rules = data.rules ?? {};
+  const brandRules = data.brandRules ?? {};
+  if (
+    typeof brandRules !== "object" ||
+    !Object.entries(brandRules).every(
+      ([k, v]) =>
+        isValidBrandRuleKey(k) &&
+        !!v &&
+        (v.rule === "avoid" || v.rule === "support") &&
+        isString(v.label) &&
+        v.label.length > 0 &&
+        v.label.length <= 200
+    )
+  ) {
+    throw new BackupError("This backup is damaged and can't be imported.");
+  }
   if (
     !isNonNegInt(g.voteXp ?? 0) ||
     !isNonNegInt(g.voteCount ?? 0) ||
@@ -108,8 +132,8 @@ export function parseBackup(text: string, sizeBytes = text.length): Backup {
   }
   // Keep only the scan fields we know about.
   const scans = data.scans.map(
-    ({ id, code, country, isPositive, source, scannedAt, rule, productName, brand, owner, categories }) =>
-      ({ id, code, country, isPositive, source, scannedAt, rule, productName, brand, owner, categories }) as ScanRecord
+    ({ id, code, country, isPositive, source, scannedAt, rule, productName, brand, owner, categories, brandRule }) =>
+      ({ id, code, country, isPositive, source, scannedAt, rule, productName, brand, owner, categories, brandRule }) as ScanRecord
   );
   return {
     app: BACKUP_APP,
@@ -118,6 +142,7 @@ export function parseBackup(text: string, sizeBytes = text.length): Backup {
     scans: scans.map((s) => Object.fromEntries(Object.entries(s).filter(([, v]) => v !== undefined)) as ScanRecord),
     gamification: { voteXp: g.voteXp ?? 0, voteCount: g.voteCount ?? 0, badgeUnlockedAt: g.badgeUnlockedAt ?? {} },
     rules,
+    brandRules,
     preferences: typeof data.preferences === "object" && data.preferences ? data.preferences : {},
   };
 }
@@ -125,7 +150,7 @@ export function parseBackup(text: string, sizeBytes = text.length): Backup {
 export function backupSummary(backup: Backup) {
   return {
     scans: backup.scans.length,
-    rules: Object.keys(backup.rules).length,
+    rules: Object.keys(backup.rules).length + Object.keys(backup.brandRules).length,
     exportedAt: backup.exportedAt,
   };
 }

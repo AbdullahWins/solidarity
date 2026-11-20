@@ -4,6 +4,7 @@ import * as Sharing from "expo-sharing";
 import { Platform } from "react-native";
 
 import { backupFileName, BackupError, buildBackup, mergeBackup, parseBackup, type Backup } from "./backup";
+import { getCachedBrandRules, mergeBrandRules } from "./brandRules";
 import { getCachedRules, mergeRules } from "./countryRules";
 import { getPreferences } from "./preferences";
 import { getGamificationState, getScans, replaceScans, saveGamificationState } from "./storage";
@@ -11,7 +12,7 @@ import { getGamificationState, getScans, replaceScans, saveGamificationState } f
 /** Writes a backup file and opens the share sheet (a download on web). */
 export async function exportBackup(): Promise<void> {
   const [scans, gamification, preferences] = await Promise.all([getScans(), getGamificationState(), getPreferences()]);
-  const json = JSON.stringify(buildBackup({ scans, gamification, rules: getCachedRules(), preferences }), null, 1);
+  const json = JSON.stringify(buildBackup({ scans, gamification, rules: getCachedRules(), brandRules: getCachedBrandRules(), preferences }), null, 1);
   const name = backupFileName();
 
   if (Platform.OS === "web") {
@@ -56,7 +57,8 @@ export async function applyBackup(backup: Backup): Promise<{ added: number; rule
   await saveGamificationState(merged.gamification);
   const before = Object.keys(getCachedRules()).length;
   await mergeRules(backup.rules);
-  return { added: merged.added, rules: Object.keys(getCachedRules()).length - before };
+  const brandAdded = await mergeBrandRules(backup.brandRules);
+  return { added: merged.added, rules: Object.keys(getCachedRules()).length - before + brandAdded };
 }
 
 // The picked backup, handed from Settings to the preview screen.

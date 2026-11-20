@@ -45,6 +45,11 @@ test("period boundaries are local days", () => {
   expect(filterScans(edge, { ...NO_FILTER, period: "7d" }, now)).toHaveLength(1);
 });
 
+test("a brand rule at scan time decides the tone, even outside country ranges", () => {
+  expect(toneOf({ ...scans[0], brandRule: { rule: "avoid", target: "Ferrero" } })).toBe("avoid");
+  expect(toneOf({ ...scans[3], brandRule: { rule: "support", target: "X" } })).toBe("fine");
+});
+
 test("filters combine", () => {
   expect(ids(filterScans(scans, { query: "portugal", tone: "fine", period: "30d" }, now))).toEqual(["3"]);
   expect(filterScans(scans, { query: "portugal", tone: "avoid", period: "all" }, now)).toHaveLength(0);

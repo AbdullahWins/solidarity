@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, radius, spacing, typography } from "../../constants/theme";
 import { useCloudSync } from "../../hooks/useCloudSync";
 import { useBasket } from "../../hooks/useBasket";
+import { useBrandRules } from "../../hooks/useBrandRules";
 import { useCountryRules } from "../../hooks/useCountryRules";
 import { useCountryVotes } from "../../hooks/useCountryVotes";
 import { usePreferences } from "../../hooks/usePreferences";
@@ -18,7 +19,8 @@ import { useLayout } from "../../hooks/useLayout";
 import { useScanHistory } from "../../hooks/useScanHistory";
 import { badgeDefinitions } from "../../lib/badges";
 import { getBasket, recordBasketScan, removeFromBasket, setBasketActive, updateBasketItem } from "../../lib/basket";
-import { resolveAnswer, type Answer } from "../../lib/countryRules";
+import { getCachedBrandRules } from "../../lib/brandRules";
+import { getCachedRules, resolveAnswer, type Answer } from "../../lib/countryRules";
 import { parseBarcode } from "../../lib/gtin";
 import { isDemo } from "../../lib/demo";
 import { hapticBasketAdd, hapticSelection, hapticVerdict } from "../../lib/haptics";
@@ -30,6 +32,7 @@ import type { ScanRecord, ScanSource } from "../../lib/types";
 import { openCountry } from "../../lib/navigation";
 import { isVotableCountry, type VoteChoice } from "../../lib/votes";
 import { AccountButton } from "../navigation/AccountButton";
+import { BrandRuleSwitch } from "../rules/BrandRuleSwitch";
 import { RuleSwitch } from "../rules/RuleSwitch";
 import { LevelUpModal } from "../gamification/LevelUpModal";
 import { Badge } from "../ui/Badge";
@@ -108,6 +111,7 @@ export function ScanScreen() {
     applyGamificationState
   );
   const rules = useCountryRules();
+  const brandRules = useBrandRules();
   const { preferences, update: updatePreferences } = usePreferences();
   const [permission, requestPermission] = useCameraPermissions();
 
@@ -146,6 +150,43 @@ export function ScanScreen() {
   const product = useProductLookup(latestRecord?.code ?? null, preferences.productLookup === "on", (found) => {
     if (latestRecord) void updateScan(latestRecord.id, productPatch(found.product));
   });
+
+  // Product details for the open result: live lookup, or what was saved on the scan.
+  const latestProduct =
+    product.status === "found"
+      ? product.product
+      : latestRecord?.brand || latestRecord?.owner
+        ? { brand: latestRecord.brand, owner: latestRecord.owner }
+        : null;
+  const latestAnswer = latest
+    ? resolveAnswer(
+        latest.record.country,
+        isVotableCountry(latest.record.country) ? getVerdict(latest.record.country) : true,
+        rules,
+        latestProduct,
+        brandRules
+      )
+    : null;
+
+  // The verdict signalled (haptic + announcement) for the open result. When a
+  // brand rule changes it after product details arrive, signal once more.
+  const signalledRef = useRef<{ id: string; tone: Answer["tone"] } | null>(null);
+  const brandKey = latestAnswer?.brand ? `${latestAnswer.brand.rule}:${latestAnswer.brand.target}` : "";
+  useEffect(() => {
+    if (!latest || !latestAnswer) return;
+    const s = signalledRef.current;
+    if (latestAnswer.brand && s && s.id === latest.record.id && s.tone !== latestAnswer.tone) {
+      signalledRef.current = { id: latest.record.id, tone: latestAnswer.tone };
+      hapticVerdict(latestAnswer.tone);
+      announce(`${latestAnswer.brand.target}. You ${latestAnswer.brand.rule} this ${latestProduct?.owner === latestAnswer.brand.target ? "company" : "brand"}.`);
+    }
+    const saved = latest.record.brandRule;
+    if (latestAnswer.brand && (saved?.rule !== latestAnswer.brand.rule || saved?.target !== latestAnswer.brand.target)) {
+      void updateScan(latest.record.id, { brandRule: latestAnswer.brand });
+    }
+    // Keyed on the brand rule and tone only; the other values are read fresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [latest?.record.id, brandKey, latestAnswer?.tone]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -191,8 +232,21 @@ export function ScanScreen() {
             if (getCachedPreferences().productLookup === "on" && isVotableCountry(country) && !isDemo()) {
               void lookupProduct(parsed.code).then((found) => {
                 if (found.status !== "found") return;
-                void updateBasketItem(parsed.code, { productName: found.product.name ?? found.product.brand, owner: found.product.owner });
-                void updateScan(result.record.id, productPatch(found.product));
+                // A brand or company rule can change the item's verdict once we know the product.
+                const withProduct = resolveAnswer(country, positive, getCachedRules(), found.product, getCachedBrandRules());
+                void updateBasketItem(parsed.code, {
+                  productName: found.product.name ?? found.product.brand,
+                  owner: found.product.owner,
+                  tone: withProduct.tone,
+                });
+                void updateScan(result.record.id, {
+                  ...productPatch(found.product),
+                  ...(withProduct.brand ? { brandRule: withProduct.brand } : {}),
+                });
+                if (withProduct.brand && withProduct.tone !== answer.tone) {
+                  hapticBasketAdd(withProduct.tone);
+                  announce(`${withProduct.brand.target}. You ${withProduct.brand.rule} it. Basket updated.`);
+                }
               });
             }
           }
@@ -216,6 +270,7 @@ export function ScanScreen() {
         setManualOpen(false);
         setToast({ xp: result.gamification.xp, badgeIds: result.newlyUnlockedBadgeIds });
         if (result.leveledUp) setLevelUp(result.gamification.level);
+        signalledRef.current = { id: result.record.id, tone: answer.tone };
         hapticVerdict(answer.tone);
         announce(spokenVerdict(country, answer, positive));
         return true;
@@ -456,7 +511,7 @@ export function ScanScreen() {
         const { record, kind } = latest;
         const votable = isVotableCountry(record.country);
         const community = votable ? getVerdict(record.country) : null;
-        const answer = resolveAnswer(record.country, community ?? true, rules);
+        const answer = latestAnswer ?? resolveAnswer(record.country, community ?? true, rules);
         const verdict = answer.tone === "neutral" ? null : answer.tone === "positive";
         const tally = votable ? getTally(record.country) : undefined;
         const votes = (tally?.upvotes ?? 0) + (tally?.downvotes ?? 0);
@@ -465,8 +520,11 @@ export function ScanScreen() {
           votes > 0
             ? `${community ? "Positive" : "Negative"} from ${votes.toLocaleString()} vote${votes === 1 ? "" : "s"}`
             : "no votes yet";
+        const countryRuleLine = answer.rule ? `Your rule for ${record.country}: ${answer.rule === "avoid" ? "Avoid" : "Support"}` : null;
         const headline =
-          answer.source === "rule"
+          answer.source === "brand-rule" && answer.brand
+            ? `You ${answer.brand.rule} ${answer.brand.target}`
+            : answer.source === "rule"
             ? answer.rule === "avoid"
               ? `You avoid ${record.country}`
               : `You support ${record.country}`
@@ -478,7 +536,10 @@ export function ScanScreen() {
                 ? "Looks fine"
                 : "Community says avoid";
         const caption =
-          answer.source === "rule"
+          answer.source === "brand-rule"
+            ? [countryRuleLine, votable ? `Community: ${communityLine}` : null].filter(Boolean).join(" · ") ||
+              `Registered in ${record.country}`
+            : answer.source === "rule"
             ? `Community: ${communityLine}`
             : verdict === null
               ? record.country === "Unknown"
@@ -537,6 +598,8 @@ export function ScanScreen() {
 
               {detailsOpen ? (
                 <Animated.View entering={FadeIn.duration(180)} style={styles.details}>
+                  {latestProduct?.brand ? <BrandRuleSwitch name={latestProduct.brand} kind="brand" /> : null}
+                  {latestProduct?.owner ? <BrandRuleSwitch name={latestProduct.owner} kind="company" /> : null}
                   {votable ? <RuleSwitch country={record.country} /> : null}
                   {votable ? (
                     <View style={styles.voteBlock}>

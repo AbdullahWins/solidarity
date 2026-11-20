@@ -40,7 +40,7 @@ export async function addScan(record: ScanRecord): Promise<ScanRecord[]> {
 }
 
 /** Product details that can be added to a scan after it was recorded. */
-export type ProductPatch = Partial<Pick<ScanRecord, "productName" | "brand" | "owner" | "categories">>;
+export type ProductPatch = Partial<Pick<ScanRecord, "productName" | "brand" | "owner" | "categories" | "brandRule">>;
 
 /** Patches one stored scan (e.g. product details that arrive after the scan). */
 export async function updateScan(

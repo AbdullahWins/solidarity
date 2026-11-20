@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+import { brandRuleFor, type BrandRule, type BrandRules } from "./brandRules";
 import { isVotableCountry, normalizeCountryKey } from "./votes";
 
 /**
@@ -79,19 +80,34 @@ export async function mergeRules(incoming: Rules): Promise<void> {
 
 export type Answer = {
   /** Where the primary answer comes from. */
-  source: "rule" | "community" | "none";
+  source: "brand-rule" | "rule" | "community" | "none";
   tone: "positive" | "negative" | "neutral";
+  /** The country rule, if the user has one (shown second when a brand rule leads). */
   rule?: CountryRule;
+  /** The brand or company rule that leads the answer, if any. */
+  brand?: { rule: BrandRule; target: string };
 };
 
+const toneOfRule = (r: "avoid" | "support") => (r === "support" ? "positive" : "negative");
+
 /**
- * The single answer for a country, shared by the scan result, haptics,
- * History and Community so they can never disagree. A personal rule wins;
- * otherwise the community verdict; non-votable ranges are neutral.
+ * The single answer for a scan, shared by the result, haptics, History and
+ * the basket so they can never disagree. Order: a brand or company rule
+ * (Avoid wins a conflict), then a country rule, then the community verdict.
+ * Non-votable ranges are neutral unless a brand rule applies.
  */
-export function resolveAnswer(country: string, communityPositive: boolean, rules: Rules = cache): Answer {
-  if (!isVotableCountry(country)) return { source: "none", tone: "neutral" };
-  const rule = rules[normalizeCountryKey(country)];
-  if (rule) return { source: "rule", tone: rule === "support" ? "positive" : "negative", rule };
+export function resolveAnswer(
+  country: string,
+  communityPositive: boolean,
+  rules: Rules = cache,
+  product?: { brand?: string; owner?: string } | null,
+  brandRules?: BrandRules
+): Answer {
+  const votable = isVotableCountry(country);
+  const countryRule = votable ? rules[normalizeCountryKey(country)] : undefined;
+  const brand = brandRuleFor(product, brandRules);
+  if (brand) return { source: "brand-rule", tone: toneOfRule(brand.rule), brand, ...(countryRule ? { rule: countryRule } : {}) };
+  if (!votable) return { source: "none", tone: "neutral" };
+  if (countryRule) return { source: "rule", tone: toneOfRule(countryRule), rule: countryRule };
   return { source: "community", tone: communityPositive ? "positive" : "negative" };
 }

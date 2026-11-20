@@ -17,6 +17,8 @@ export type ScanRecord = {
   owner?: string;
   /** Most specific Open Food Facts category tags, used for alternatives. */
   categories?: string[];
+  /** The brand or company rule that led the answer for this scan, if any. */
+  brandRule?: { rule: "avoid" | "support"; target: string };
 };
 
 export type GamificationState = {

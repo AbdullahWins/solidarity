@@ -9,6 +9,7 @@ import { ListRow } from "../components/ui/ListRow";
 import { Screen } from "../components/ui/Screen";
 import { APP_NAME, APP_SHARE_URL, LINKS } from "../constants/app-info";
 import { colors, spacing, typography } from "../constants/theme";
+import { useBrandRules } from "../hooks/useBrandRules";
 import { useCountryRules } from "../hooks/useCountryRules";
 import { useLayout } from "../hooks/useLayout";
 import { BackupError } from "../lib/backup";
@@ -33,7 +34,7 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
 
 export default function SettingsScreen() {
   const { preferences, update } = usePreferences();
-  const ruleCount = Object.keys(useCountryRules()).length;
+  const ruleCount = Object.keys(useCountryRules()).length + Object.keys(useBrandRules()).length;
   const { gamification, clearHistory, scans } = useScanHistory();
   const { columns } = useLayout();
   const [togglingReminder, setTogglingReminder] = useState(false);
@@ -134,8 +135,8 @@ export default function SettingsScreen() {
     <Group title="Your data">
       <ListRow
         icon="shield-checkmark-outline"
-        label="My country rules"
-        subtitle={`${ruleCount} rule${ruleCount === 1 ? "" : "s"} · Avoid or Support, on this device only`}
+        label="My rules"
+        subtitle={`${ruleCount} rule${ruleCount === 1 ? "" : "s"} · countries, brands and companies, on this device only`}
         onPress={() => router.push("/rules")}
       />
       <ListRow

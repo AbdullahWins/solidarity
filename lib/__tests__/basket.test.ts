@@ -70,6 +70,14 @@ test("the share text groups by verdict and contains no barcodes", () => {
   expect(text).not.toMatch(/\d{8,}/);
 });
 
+test("a late brand rule moves the item between counts", async () => {
+  const { updateBasketItem } = require("../basket") as typeof import("../basket");
+  await setBasketActive(true);
+  await addToBasket(item("777", "positive"));
+  await updateBasketItem("777", { tone: "negative", owner: "Nestlé" });
+  expect(basketCounts(getBasket().items)).toMatchObject({ positive: 0, negative: 1 });
+});
+
 test("the same barcode captured twice is saved once", async () => {
   const { recordBasketScan } = require("../basket") as typeof import("../basket");
   await setBasketActive(true);
