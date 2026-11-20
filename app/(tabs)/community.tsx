@@ -1,11 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useCallback, useMemo, useState } from "react";
-import { Alert, FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { Alert, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { Card } from "../../components/ui/Card";
 import { EmptyState } from "../../components/ui/EmptyState";
-import { IconButton } from "../../components/ui/IconButton";
+import { Flag } from "../../components/ui/Flag";
 import { Screen, ScreenHeader, useScreenInsets } from "../../components/ui/Screen";
 import { SearchField } from "../../components/ui/SearchField";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
@@ -15,10 +15,23 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useCountryVotes } from "../../hooks/useCountryVotes";
 import { useLayout } from "../../hooks/useLayout";
 import { useScanHistory } from "../../hooks/useScanHistory";
-import { getVotableCountryNames, type VoteChoice } from "../../lib/votes";
+import { hapticSelection } from "../../lib/haptics";
+import { openCountry } from "../../lib/navigation";
+import { getVotableCountryNames, type CountryTally, type VoteChoice } from "../../lib/votes";
 
 const ALL_COUNTRIES = getVotableCountryNames();
-type Tab = "trending" | "all" | "mine";
+type Tab = "all" | "mine";
+type Sort = "votes" | "az" | "positive" | "negative";
+
+const SORTS: { key: Sort; label: string; icon: React.ComponentProps<typeof Ionicons>["name"] }[] = [
+  { key: "votes", label: "Most votes", icon: "flame-outline" },
+  { key: "az", label: "A–Z", icon: "text-outline" },
+  { key: "positive", label: "Most positive", icon: "thumbs-up-outline" },
+  { key: "negative", label: "Most negative", icon: "thumbs-down-outline" },
+];
+
+const totalOf = (t?: CountryTally) => (t?.upvotes ?? 0) + (t?.downvotes ?? 0);
+const shareOf = (t?: CountryTally) => (totalOf(t) ? (t!.upvotes ?? 0) / totalOf(t) : -1);
 
 export default function CommunityScreen() {
   const { user } = useAuth();
@@ -31,13 +44,12 @@ export default function CommunityScreen() {
   const layout = useLayout();
   const pad = useScreenInsets();
   const [search, setSearch] = useState("");
-  const [searchOpen, setSearchOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [tab, setTab] = useState<Tab>("all");
+  const [sort, setSort] = useState<Sort>("votes");
 
   const columns = layout.columns;
-  const maxWidth = sizes.wide;
-  const sidePad = Math.max(pad.paddingRight, (layout.width - (layout.useRail ? 88 : 0) - maxWidth) / 2);
+  const sidePad = Math.max(pad.paddingRight, (layout.width - (layout.useRail ? 88 : 0) - sizes.wide) / 2);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -45,33 +57,35 @@ export default function CommunityScreen() {
     setRefreshing(false);
   };
 
-  const myVotedCountries = useMemo(() => ALL_COUNTRIES.filter((c) => myVote(c) !== undefined), [myVote]);
-
-  const trending = useMemo(
-    () =>
-      ALL_COUNTRIES.map((country) => {
-        const t = getTally(country);
-        return { country, total: (t?.upvotes ?? 0) + (t?.downvotes ?? 0) };
-      })
-        .filter((e) => e.total > 0)
-        .sort((a, b) => b.total - a.total)
-        .slice(0, 20)
-        .map((e) => e.country),
-    [getTally]
-  );
+  const myVoted = useMemo(() => ALL_COUNTRIES.filter((c) => myVote(c) !== undefined), [myVote]);
 
   const data = useMemo(() => {
-    const base = tab === "mine" ? myVotedCountries : tab === "trending" ? trending : ALL_COUNTRIES;
+    const base = tab === "mine" ? myVoted : ALL_COUNTRIES;
     const q = search.trim().toLowerCase();
-    return q ? base.filter((c) => c.toLowerCase().includes(q)) : base;
-  }, [search, tab, myVotedCountries, trending]);
+    const filtered = q ? base.filter((c) => c.toLowerCase().includes(q)) : [...base];
+    const byName = (a: string, b: string) => a.localeCompare(b);
+    switch (sort) {
+      case "votes":
+        return filtered.sort((a, b) => totalOf(getTally(b)) - totalOf(getTally(a)) || byName(a, b));
+      case "positive":
+        return filtered.sort((a, b) => shareOf(getTally(b)) - shareOf(getTally(a)) || byName(a, b));
+      case "negative":
+        return filtered.sort(
+          (a, b) =>
+            (shareOf(getTally(a)) < 0 ? 2 : shareOf(getTally(a))) - (shareOf(getTally(b)) < 0 ? 2 : shareOf(getTally(b))) ||
+            byName(a, b)
+        );
+      default:
+        return filtered.sort(byName);
+    }
+  }, [search, tab, sort, myVoted, getTally]);
 
   const communityStats = useMemo(() => {
     let up = 0;
     let down = 0;
     let voted = 0;
     for (const t of Object.values(tallies)) {
-      if ((t.upvotes ?? 0) + (t.downvotes ?? 0) > 0) voted += 1;
+      if (totalOf(t) > 0) voted += 1;
       up += t.upvotes ?? 0;
       down += t.downvotes ?? 0;
     }
@@ -94,20 +108,32 @@ export default function CommunityScreen() {
     const verdict = getVerdict(country);
     const tally = getTally(country);
     const mine = myVote(country);
+    const total = totalOf(tally);
     return (
       <View style={[styles.cell, { width: `${100 / columns}%`, paddingHorizontal: columns > 1 ? spacing.xs : 0 }]}>
-        <Card tone={verdict ? "default" : "negative"} style={styles.row}>
-          <View style={styles.rowTop}>
-            <View style={[styles.dot, { backgroundColor: verdict ? colors.positive : colors.negative }]} />
-            <Text style={styles.rowTitle} numberOfLines={1}>
-              {country}
-            </Text>
+        <Card tone={total > 0 && !verdict ? "negative" : "default"} style={styles.row}>
+          <Pressable
+            onPress={() => openCountry(country)}
+            style={({ pressed }) => [styles.rowTop, pressed && { opacity: 0.7 }]}
+            accessibilityRole="button"
+            accessibilityLabel={`${country}, ${total ? (verdict ? "positive" : "negative") : "no votes yet"}`}
+            accessibilityHint="Opens country details"
+          >
+            <Flag country={country} size={24} />
+            <View style={styles.rowTitleWrap}>
+              <Text style={styles.rowTitle} numberOfLines={1}>
+                {country}
+              </Text>
+              <Text style={styles.rowMeta}>{total ? `${total.toLocaleString()} vote${total === 1 ? "" : "s"}` : "No votes yet"}</Text>
+            </View>
             {mine ? (
               <View style={styles.mineTag}>
-                <Text style={styles.mineText}>Voted</Text>
+                <Ionicons name={mine === "up" ? "thumbs-up" : "thumbs-down"} size={11} color={colors.accent} />
+                <Text style={styles.mineText}>You</Text>
               </View>
             ) : null}
-          </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.muted} />
+          </Pressable>
           <VoteButtons tally={tally} myChoice={mine} onPress={(choice) => handleVote(country, choice)} compact showBar />
         </Card>
       </View>
@@ -116,21 +142,7 @@ export default function CommunityScreen() {
 
   const header = (
     <View style={styles.headerWrap}>
-      <ScreenHeader
-        title="Community"
-        subtitle="Every country's colour is set by open voting, not by us."
-        right={
-          <IconButton
-            icon={searchOpen ? "close" : "search"}
-            onPress={() => {
-              if (searchOpen) setSearch("");
-              setSearchOpen((v) => !v);
-            }}
-            active={searchOpen}
-            accessibilityLabel={searchOpen ? "Close search" : "Search countries"}
-          />
-        }
-      />
+      <ScreenHeader title="Community" subtitle="Every country's colour comes from open voting, not from us." />
 
       <Card tone="hero">
         <View style={styles.statsRow}>
@@ -147,26 +159,50 @@ export default function CommunityScreen() {
           ))}
         </View>
         {!user ? (
-          <Text style={styles.heroHint}>
-            <Ionicons name="lock-closed" size={12} color={colors.subtext} /> Anyone can see the counts. Sign in and verify
-            your email to vote.
-          </Text>
+          <Pressable onPress={() => router.push("/auth")} style={styles.heroHint} accessibilityRole="button">
+            <Ionicons name="lock-closed" size={12} color={colors.subtext} />
+            <Text style={styles.heroHintText}>Anyone can see the counts. </Text>
+            <Text style={[styles.heroHintText, styles.heroHintLink]}>Sign in to vote</Text>
+          </Pressable>
         ) : null}
       </Card>
 
-      {searchOpen ? (
-        <SearchField placeholder="Search countries…" value={search} onChangeText={setSearch} autoFocus />
-      ) : (
-        <SegmentedControl
-          segments={[
-            { key: "trending", label: "Trending" },
-            { key: "all", label: "All" },
-            ...(user ? [{ key: "mine", label: `My votes${myVotedCountries.length ? ` · ${myVotedCountries.length}` : ""}` }] : []),
-          ]}
-          value={tab}
-          onChange={(key) => setTab(key as Tab)}
-        />
-      )}
+      <View style={styles.controls}>
+        <SearchField placeholder={`Search ${ALL_COUNTRIES.length} countries`} value={search} onChangeText={setSearch} />
+        {user ? (
+          <SegmentedControl
+            segments={[
+              { key: "all", label: "All countries" },
+              { key: "mine", label: `My votes${myVoted.length ? ` · ${myVoted.length}` : ""}` },
+            ]}
+            value={tab}
+            onChange={(k) => setTab(k as Tab)}
+          />
+        ) : null}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+          {SORTS.map((s) => {
+            const active = sort === s.key;
+            return (
+              <Pressable
+                key={s.key}
+                onPress={() => {
+                  if (!active) {
+                    hapticSelection();
+                    setSort(s.key);
+                  }
+                }}
+                style={[styles.chip, active && styles.chipActive]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                accessibilityLabel={`Sort by ${s.label}`}
+              >
+                <Ionicons name={s.icon} size={14} color={active ? colors.bg : colors.subtext} />
+                <Text style={[styles.chipText, active && styles.chipTextActive]}>{s.label}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
     </View>
   );
 
@@ -178,9 +214,7 @@ export default function CommunityScreen() {
       text={
         search
           ? `No countries match “${search}”.`
-          : tab === "mine"
-            ? "You haven't voted yet. Scan a product or pick a country to cast your first vote."
-            : "No trending countries yet. Be the first to vote."
+          : "You haven't voted yet. Open any country, or scan a product, to cast your first vote."
       }
     />
   );
@@ -244,11 +278,49 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   heroHint: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    flexWrap: "wrap",
+    gap: 4,
+    marginTop: spacing.md,
+  },
+  heroHintText: {
     ...typography.caption,
     color: colors.subtext,
     fontWeight: "500",
-    marginTop: spacing.md,
-    textAlign: "center",
+  },
+  heroHintLink: {
+    color: colors.accent,
+    fontWeight: "700",
+  },
+  controls: {
+    gap: spacing.md,
+  },
+  chips: {
+    gap: spacing.sm,
+  },
+  chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    minHeight: 36,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.panel,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderStrong,
+  },
+  chipActive: {
+    backgroundColor: colors.text,
+    borderColor: colors.text,
+  },
+  chipText: {
+    ...typography.caption,
+    color: colors.subtext,
+  },
+  chipTextActive: {
+    color: colors.bg,
   },
   columnWrapper: {
     marginHorizontal: -spacing.xs,
@@ -263,23 +335,30 @@ const styles = StyleSheet.create({
   rowTop: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.sm,
+    gap: spacing.md,
+    minHeight: 40,
   },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: radius.pill,
+  rowTitleWrap: {
+    flex: 1,
   },
   rowTitle: {
     ...typography.bodyStrong,
     color: colors.text,
-    flex: 1,
+  },
+  rowMeta: {
+    ...typography.caption,
+    color: colors.muted,
+    fontWeight: "500",
+    marginTop: 1,
   },
   mineTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
     backgroundColor: "rgba(142, 166, 255, 0.14)",
     borderRadius: radius.pill,
     paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
+    paddingVertical: 3,
   },
   mineText: {
     ...typography.caption,
