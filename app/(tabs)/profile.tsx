@@ -12,6 +12,7 @@ import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { ListRow } from "../../components/ui/ListRow";
 import { ProgressBar } from "../../components/ui/ProgressBar";
+import { ProgressRing } from "../../components/ui/ProgressRing";
 import { Screen } from "../../components/ui/Screen";
 import { SectionHeader } from "../../components/ui/SectionHeader";
 import { colors, radius, spacing, typography } from "../../constants/theme";
@@ -85,17 +86,27 @@ export default function ProfileScreen() {
   const levelCard = (
     <Card tone="hero">
       <View style={styles.levelHeader}>
-        {user ? (
-          <Avatar name={user.displayName || user.email || "S"} seed={user.uid} size={56} />
-        ) : (
-          <View style={styles.guestAvatar}>
-            <Ionicons name="person" size={26} color={colors.subtext} />
+        <ProgressRing size={76} stroke={4} progress={progress}>
+          {user ? (
+            <Avatar name={user.displayName || user.email || "S"} seed={user.uid} size={60} />
+          ) : (
+            <View style={styles.guestAvatar}>
+              <Ionicons name="person" size={26} color={colors.subtext} />
+            </View>
+          )}
+          <View style={styles.levelBadge}>
+            <Text style={styles.levelBadgeText}>{level}</Text>
           </View>
-        )}
+        </ProgressRing>
         <View style={styles.levelHeaderText}>
           <Text style={styles.name} numberOfLines={1}>
             {user ? user.displayName || "Scanner" : "Guest"}
           </Text>
+          {user?.email ? (
+            <Text style={styles.email} numberOfLines={1}>
+              {user.email}
+            </Text>
+          ) : null}
           <RankTitle level={level} />
         </View>
       </View>
@@ -129,7 +140,7 @@ export default function ProfileScreen() {
     user ? (
       <Card padded={false}>
         <View style={styles.cardHead}>
-          <SectionHeader title="Account" caption={user.email ?? undefined} />
+          <SectionHeader title="Account" caption={emailVerified ? "Signed in · email verified" : "Signed in"} />
         </View>
         {!emailVerified && (
           <View style={styles.verify}>
@@ -247,10 +258,35 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     marginBottom: spacing.lg,
   },
+  levelBadge: {
+    position: "absolute",
+    bottom: -2,
+    right: -2,
+    minWidth: 26,
+    height: 26,
+    paddingHorizontal: 6,
+    borderRadius: 13,
+    backgroundColor: colors.gold,
+    borderWidth: 3,
+    borderColor: colors.surface,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  levelBadgeText: {
+    fontSize: 11,
+    fontWeight: "900",
+    color: "#3A2500",
+    fontVariant: ["tabular-nums"],
+  },
+  email: {
+    ...typography.caption,
+    color: colors.subtext,
+    fontWeight: "500",
+  },
   guestAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: colors.panelStrong,
     alignItems: "center",
     justifyContent: "center",
