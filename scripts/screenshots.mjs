@@ -197,6 +197,16 @@ const SCREENS = [
       await page.getByLabel("What this barcode tells you").click();
     },
   },
+  {
+    id: "04f-alternatives",
+    label: "Avoid result with alternatives",
+    path: "/",
+    act: async (page) => {
+      await page.getByText("Type code", { exact: true }).click();
+      await page.getByPlaceholder("e.g. 4006381333931").fill("6901234567892");
+      await page.getByText("Look up", { exact: true }).click();
+    },
+  },
   { id: "05-history", label: "History", path: "/history" },
   {
     id: "05b-history-filtered",

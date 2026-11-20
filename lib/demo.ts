@@ -42,4 +42,5 @@ export const DEMO_LEADERBOARD: LeaderboardEntry[] = [
 export const DEMO_PRODUCTS: Record<string, { name: string; brand: string; owner?: string; categories?: string[] }> = {
   "5601234567892": { name: "Extra virgin olive oil 750 ml", brand: "Quinta Demo" },
   "4006381333931": { name: "Textmarker highlighter, yellow", brand: "Stabilo", owner: "Schwan-Stabilo Group" },
+  "6901234567892": { name: "Dark chocolate bar 85%", brand: "Demo Cocoa", categories: ["en:dark-chocolates"] },
 };

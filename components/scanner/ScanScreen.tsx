@@ -17,6 +17,7 @@ import { usePreferences } from "../../hooks/usePreferences";
 import { useProductLookup } from "../../hooks/useProductLookup";
 import { useLayout } from "../../hooks/useLayout";
 import { useScanHistory } from "../../hooks/useScanHistory";
+import { findAlternatives } from "../../lib/alternatives";
 import { badgeDefinitions } from "../../lib/badges";
 import { getBasket, recordBasketScan, removeFromBasket, setBasketActive, updateBasketItem } from "../../lib/basket";
 import { getCachedBrandRules } from "../../lib/brandRules";
@@ -42,6 +43,7 @@ import { Flag } from "../ui/Flag";
 import { Screen } from "../ui/Screen";
 import { TextField } from "../ui/TextField";
 import { VoteButtons } from "../voting/VoteButtons";
+import { AlternativesRow } from "./AlternativesRow";
 import { BarcodeInfoSheet } from "./BarcodeInfoSheet";
 import { BasketBar, type BasketNotice } from "./BasketBar";
 import { ProductRow } from "./ProductRow";
@@ -583,6 +585,14 @@ export function ScanScreen() {
                 <Text style={[styles.verdictHeadline, { color: tone }]}>{headline}</Text>
               </View>
               <Text style={styles.verdictCaption}>{caption}</Text>
+              {answer.tone === "negative" ? (
+                <AlternativesRow
+                  items={findAlternatives(
+                    { code: record.code, categories: latestProduct?.categories ?? record.categories },
+                    scans
+                  )}
+                />
+              ) : null}
 
               <Button label="Scan next" icon="scan" variant="brand" onPress={scanAgain} style={styles.scanNext} />
 
