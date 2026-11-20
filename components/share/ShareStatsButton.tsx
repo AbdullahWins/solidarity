@@ -21,6 +21,11 @@ export function ShareStatsButton({ scans, gamification, stats }: Props) {
   const shotRef = useRef<ViewShotRef>(null);
   const [busy, setBusy] = useState<"share" | "save" | null>(null);
   const dailyCounts = useMemo(() => buildDailyCounts(scans), [scans]);
+  const topCountries = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const s of scans) counts.set(s.country, (counts.get(s.country) ?? 0) + 1);
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([c]) => c);
+  }, [scans]);
   // Only mount the off-screen card while capturing, so it isn't laid out and
   // rasterised on every render of Stats/Profile.
   const [mounted, setMounted] = useState(false);
@@ -112,6 +117,7 @@ export function ShareStatsButton({ scans, gamification, stats }: Props) {
               gamification={gamification}
               stats={stats}
               dailyCounts={dailyCounts}
+              topCountries={topCountries}
               onReady={() => readyRef.current?.()}
             />
           </ViewShot>

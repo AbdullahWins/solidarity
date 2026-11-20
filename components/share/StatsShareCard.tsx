@@ -5,6 +5,7 @@ import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { ContributionGraph } from "../ui/ContributionGraph";
+import { Flag } from "../ui/Flag";
 import { APP_NAME, LINKS } from "../../constants/app-info";
 import { colors, gradients, radius, spacing, typography } from "../../constants/theme";
 import { badgeDefinitions } from "../../lib/badges";
@@ -15,13 +16,14 @@ type Props = {
   gamification: GamificationState;
   stats: { total: number; positive: number; negative: number };
   dailyCounts: Record<string, number>;
+  topCountries?: string[];
   onReady?: () => void;
 };
 
 const logo = require("../../assets/images/logo.png");
 
 /** Fixed-size card rendered off-screen and captured as the shareable image. */
-export function StatsShareCard({ gamification, stats, dailyCounts, onReady }: Props) {
+export function StatsShareCard({ gamification, stats, dailyCounts, topCountries = [], onReady }: Props) {
   const { level, progress } = levelProgress(gamification.xp);
   const unlockedBadges = badgeDefinitions.filter((b) => gamification.unlockedBadgeIds.includes(b.id)).slice(0, 5);
 
@@ -77,6 +79,22 @@ export function StatsShareCard({ gamification, stats, dailyCounts, onReady }: Pr
           interactive={false}
         />
       </View>
+
+      {topCountries.length > 0 && (
+        <View style={styles.topRow}>
+          <Text style={styles.topLabel}>Most scanned</Text>
+          <View style={styles.topFlags}>
+            {topCountries.map((c) => (
+              <View key={c} style={styles.topItem}>
+                <Flag country={c} size={16} />
+                <Text style={styles.topName} numberOfLines={1}>
+                  {c}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
 
       {unlockedBadges.length > 0 && (
         <View style={styles.badgeRow}>
@@ -166,6 +184,33 @@ const styles = StyleSheet.create({
   },
   graphWrap: {
     alignItems: "center",
+  },
+  topRow: {
+    gap: spacing.sm,
+  },
+  topLabel: {
+    ...typography.overline,
+    color: colors.subtext,
+  },
+  topFlags: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+  },
+  topItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.panel,
+    borderRadius: radius.pill,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    maxWidth: 160,
+  },
+  topName: {
+    ...typography.caption,
+    color: colors.text,
+    flexShrink: 1,
   },
   badgeRow: {
     flexDirection: "row",
