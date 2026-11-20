@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { colors, radius, spacing, typography } from "../../constants/theme";
 import { useCloudSync } from "../../hooks/useCloudSync";
+import { useBasket } from "../../hooks/useBasket";
 import { useCountryRules } from "../../hooks/useCountryRules";
 import { useCountryVotes } from "../../hooks/useCountryVotes";
 import { usePreferences } from "../../hooks/usePreferences";
@@ -16,9 +17,13 @@ import { useProductLookup } from "../../hooks/useProductLookup";
 import { useLayout } from "../../hooks/useLayout";
 import { useScanHistory } from "../../hooks/useScanHistory";
 import { badgeDefinitions } from "../../lib/badges";
+import { getBasket, recordBasketScan, removeFromBasket, setBasketActive, updateBasketItem } from "../../lib/basket";
 import { resolveAnswer } from "../../lib/countryRules";
 import { parseBarcode } from "../../lib/gtin";
-import { hapticNotification } from "../../lib/haptics";
+import { isDemo } from "../../lib/demo";
+import { hapticImpact, hapticNotification, hapticSelection } from "../../lib/haptics";
+import { getCachedPreferences } from "../../lib/preferences";
+import { lookupProduct } from "../../lib/productLookup";
 import { countryForPrefix } from "../../lib/scan-logic";
 import type { ScanRecord } from "../../lib/types";
 import { openCountry } from "../../lib/navigation";
@@ -33,6 +38,7 @@ import { Flag } from "../ui/Flag";
 import { Screen } from "../ui/Screen";
 import { TextField } from "../ui/TextField";
 import { VoteButtons } from "../voting/VoteButtons";
+import { BasketBar, type BasketNotice } from "./BasketBar";
 import { ProductRow } from "./ProductRow";
 import { Viewfinder } from "./Viewfinder";
 
@@ -43,6 +49,9 @@ const KIND_LABEL: Record<string, string> = {
   upc_e: "UPC-E",
   gtin14: "GTIN-14",
 };
+
+const BASKET_COOLDOWN_MS = 1200;
+const BASKET_UNDO_MS = 5000;
 
 export function ScanScreen() {
   const isFocused = useIsFocused();
@@ -71,6 +80,17 @@ export function ScanScreen() {
   // Camera callbacks fire many times per second; state updates are async, so
   // a ref is the only reliable guard against recording one barcode twice.
   const lockRef = useRef(false);
+  const { basket } = useBasket();
+  const basketOn = basket.active;
+  const [basketNotice, setBasketNotice] = useState<BasketNotice | null>(null);
+  // While a product stays in view, repeat "already in basket" notices are suppressed.
+  const lastDuplicateRef = useRef<{ code: string; at: number } | null>(null);
+
+  useEffect(() => {
+    if (!basketNotice) return;
+    const t = setTimeout(() => setBasketNotice(null), BASKET_UNDO_MS);
+    return () => clearTimeout(t);
+  }, [basketNotice]);
 
   useEffect(() => {
     if (!toast) return;
@@ -98,11 +118,51 @@ export function ScanScreen() {
       }
       if (lockRef.current) return false;
       lockRef.current = true;
-      setScanning(false);
 
       const country = countryForPrefix(parsed.prefix) ?? "Unknown";
       const positive = getVerdict(country);
       const answer = resolveAnswer(country, positive);
+
+      if (getBasket().active) {
+        // Basket mode: keep the camera running, record each barcode once.
+        try {
+          const outcome = await recordBasketScan({ code: parsed.code, country, tone: answer.tone }, () =>
+            addScan({ code: parsed.code, country, isPositive: positive, source, rule: answer.rule })
+          );
+          if (outcome.status === "duplicate") {
+            const last = lastDuplicateRef.current;
+            if (!last || last.code !== parsed.code || Date.now() - last.at > 4000) {
+              setBasketNotice({ kind: "duplicate", country });
+              hapticSelection();
+            }
+            lastDuplicateRef.current = { code: parsed.code, at: Date.now() };
+          } else {
+            const { result } = outcome;
+            setBasketNotice({ kind: "added", item: { code: parsed.code, country, tone: answer.tone } });
+            setToast({ xp: result.gamification.xp, badgeIds: result.newlyUnlockedBadgeIds });
+            if (result.leveledUp) setLevelUp(result.gamification.level);
+            hapticImpact(answer.tone === "negative" ? Haptics.ImpactFeedbackStyle.Heavy : Haptics.ImpactFeedbackStyle.Light);
+            if (getCachedPreferences().productLookup === "on" && isVotableCountry(country) && !isDemo()) {
+              void lookupProduct(parsed.code).then((found) => {
+                if (found.status !== "found") return;
+                void updateBasketItem(parsed.code, { productName: found.product.name ?? found.product.brand });
+                void updateScan(result.record.id, { productName: found.product.name, brand: found.product.brand });
+              });
+            }
+          }
+          if (source === "manual") setManualCode("");
+          return true;
+        } catch {
+          Alert.alert("Couldn't save scan", "Something went wrong saving that scan. Please try again.");
+          return false;
+        } finally {
+          setTimeout(() => {
+            lockRef.current = false;
+          }, BASKET_COOLDOWN_MS);
+        }
+      }
+
+      setScanning(false);
       try {
         const result = await addScan({ code: parsed.code, country, isPositive: positive, source, rule: answer.rule });
         setLatest({ record: result.record, kind: parsed.kind });
@@ -123,7 +183,7 @@ export function ScanScreen() {
         return false;
       }
     },
-    [addScan, getVerdict]
+    [addScan, getVerdict, updateScan]
   );
 
   const onCameraScan = useCallback(
@@ -139,6 +199,15 @@ export function ScanScreen() {
     setManualError(null);
     lockRef.current = false;
     if (await submit(manualCode, "manual")) setManualCode("");
+  };
+
+  const toggleBasket = () => {
+    hapticSelection();
+    lockRef.current = false;
+    setLatest(null);
+    setScanning(true);
+    setBasketNotice(null);
+    void setBasketActive(!basketOn);
   };
 
   const scanAgain = () => {
@@ -223,16 +292,44 @@ export function ScanScreen() {
         <Button label="Look up" onPress={onManualSubmit} style={styles.manualButton} disabled={!manualCode.trim()} />
       </View>
     </Card>
-  ) : latest ? null : (
-    <Pressable
-      onPress={() => setManualOpen(true)}
-      style={({ pressed }) => [styles.manualLink, pressed && { opacity: 0.7 }]}
-      accessibilityRole="button"
-    >
-      <Ionicons name="keypad-outline" size={16} color={colors.accent} />
-      <Text style={styles.manualLinkText}>Type a code instead</Text>
-    </Pressable>
+  ) : null;
+
+  // Under the camera: switch basket mode, or type a code.
+  const controls = (
+    <View style={styles.controls}>
+      <Pressable
+        onPress={toggleBasket}
+        style={({ pressed }) => [styles.basketToggle, basketOn && styles.basketToggleOn, pressed && { opacity: 0.8 }]}
+        accessibilityRole="switch"
+        accessibilityState={{ checked: basketOn }}
+        accessibilityLabel="Basket mode"
+        accessibilityHint="Keeps scanning and builds a list of everything you scan"
+      >
+        <Ionicons name={basketOn ? "basket" : "basket-outline"} size={16} color={basketOn ? colors.bg : colors.text} />
+        <Text style={[styles.basketToggleText, basketOn && { color: colors.bg }]}>{basketOn ? "Basket on" : "Basket"}</Text>
+      </Pressable>
+      {manualOpen || (latest && !basketOn) ? null : (
+        <Pressable
+          onPress={() => setManualOpen(true)}
+          style={({ pressed }) => [styles.manualLink, pressed && { opacity: 0.7 }]}
+          accessibilityRole="button"
+        >
+          <Ionicons name="keypad-outline" size={16} color={colors.accent} />
+          <Text style={styles.manualLinkText}>Type a code instead</Text>
+        </Pressable>
+      )}
+    </View>
   );
+
+  const basketBar = basketOn ? (
+    <BasketBar
+      notice={basketNotice}
+      onUndo={(code) => {
+        void removeFromBasket(code);
+        setBasketNotice(null);
+      }}
+    />
+  ) : null;
 
   const result = latest
     ? (() => {
@@ -365,14 +462,16 @@ export function ScanScreen() {
           <View style={styles.twoPane}>
             <View style={styles.paneLeft}>{camera}</View>
             <View style={styles.paneRight}>
-              {result}
+              {controls}
+              {basketOn ? basketBar : result}
               {manual}
             </View>
           </View>
         ) : (
           <>
             {camera}
-            {result}
+            {controls}
+            {basketOn ? basketBar : result}
             {manual}
           </>
         )}
@@ -560,6 +659,32 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
+  },
+  controls: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+  },
+  basketToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    minHeight: 40,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderStrong,
+  },
+  basketToggleOn: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  basketToggleText: {
+    ...typography.bodyStrong,
+    color: colors.text,
   },
   manualLink: {
     flexDirection: "row",

@@ -125,6 +125,18 @@ const seed = {
   "solidarity:v1:myVotes": JSON.stringify(myVotes),
   "solidarity:v1:preferences": JSON.stringify({ hapticsEnabled: true, streakReminderEnabled: true, productLookup: "on" }),
   "solidarity:v1:countryRules": JSON.stringify({ portugal: "support" }),
+  // A basket from earlier today (basket mode off, so the Scan screens stay normal).
+  "solidarity:v1:basket": JSON.stringify({
+    active: false,
+    startedAt: now - 20 * 60000,
+    lastAddedAt: now - 5 * 60000,
+    items: [
+      { scanId: "b1", code: ean("560", "123456789"), country: "Portugal", tone: "positive", productName: "Extra virgin olive oil 750 ml", addedAt: now - 20 * 60000 },
+      { scanId: "b2", code: ean("400", "638133393"), country: "Germany", tone: "positive", productName: "Textmarker highlighter, yellow", addedAt: now - 15 * 60000 },
+      { scanId: "b3", code: ean("460", "100200300"), country: "Russia", tone: "negative", addedAt: now - 10 * 60000 },
+      { scanId: "b4", code: ean("977", "123456700"), country: "Serial publications (ISSN)", tone: "neutral", addedAt: now - 5 * 60000 },
+    ],
+  }),
 };
 
 // ---------------------------------------------------------------- capture plan
@@ -160,6 +172,18 @@ const SCREENS = [
       await page.getByText("Details & vote", { exact: true }).click();
     },
   },
+  {
+    id: "04c-basket-mode",
+    label: "Basket mode",
+    path: "/",
+    act: async (page) => {
+      await page.getByText("Basket", { exact: true }).click();
+      await page.getByText("Type a code instead", { exact: true }).click();
+      await page.getByPlaceholder("e.g. 4006381333931").fill(ean("800", "100104729"));
+      await page.getByText("Look up", { exact: true }).click();
+    },
+  },
+  { id: "04d-basket-summary", label: "Basket summary", path: "/basket" },
   { id: "05-history", label: "History", path: "/history" },
   { id: "06-community", label: "Community", path: "/community" },
   {
