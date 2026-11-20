@@ -58,14 +58,15 @@ export default function LeaderboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Refetch on every focus (e.g. after opting in from Profile). Wait for auth
-  // to restore first so the request carries the persisted session.
+  // Load on every focus. This is served from the 30-minute cache, and the
+  // user's own row is patched locally after opting in or syncing. Wait for
+  // auth to restore first so a real fetch carries the persisted session.
   useFocusEffect(
     useCallback(() => {
       if (authLoading) return;
       let cancelled = false;
       (async () => {
-        const data = await fetchLeaderboard(100);
+        const data = await fetchLeaderboard();
         if (cancelled) return;
         setEntries(data);
         setLoading(false);
@@ -78,7 +79,7 @@ export default function LeaderboardScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    setEntries(await fetchLeaderboard(100));
+    setEntries(await fetchLeaderboard({ force: true }));
     setRefreshing(false);
   };
 

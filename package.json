@@ -15,10 +15,15 @@
     "verify": "npm run typecheck && npm run lint && npm test",
     "icons": "python scripts/generate-icons.py",
     "screenshots": "node scripts/screenshots.mjs",
-    "flags": "node scripts/generate-flags.mjs"
+    "flags": "node scripts/generate-flags.mjs",
+    "test:rules": "node scripts/test-rules.mjs"
   },
   "jest": {
-    "preset": "jest-expo"
+    "preset": "jest-expo",
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "<rootDir>/rules/"
+    ]
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -59,6 +64,7 @@
     "react-native-worklets": "0.13.0"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^6.0.0",
     "@react-native/jest-preset": "^0.88.1",
     "@types/react": "~19.3.0",
     "country-flag-icons": "^1.6.20",

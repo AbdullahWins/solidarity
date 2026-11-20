@@ -2,15 +2,20 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   collection,
   doc,
+  FieldPath,
   getDoc,
   getDocs,
   runTransaction,
   serverTimestamp,
+  updateDoc,
+  type DocumentReference,
+  type Firestore,
   type Timestamp,
+  type Transaction,
 } from "firebase/firestore";
 
 import { countryCodeMap } from "../constants/country-map";
-import { db, isFirebaseConfigured } from "./firebase";
+import { auth, db, isFirebaseConfigured } from "./firebase";
 
 export type VoteChoice = "up" | "down";
 // "none" is a tombstone written on retraction — the voter doc is kept (not
@@ -69,7 +74,7 @@ export function verdictFromTally(tally: CountryTally | undefined | null): boolea
 }
 
 const CACHE_KEY = "solidarity:v1:countryTalliesCache";
-const CACHE_TTL_MS = 45 * 60 * 1000; // 45 minutes
+const CACHE_TTL_MS = 3 * 60 * 60 * 1000; // 3 hours; your own votes update the cache immediately
 const MY_VOTES_KEY = "solidarity:v1:myVotes";
 
 // Local mirror of "what did I vote on each country" — lets the UI show the
@@ -156,6 +161,109 @@ async function updateTallyCache(key: string, tally: CountryTally): Promise<void>
   await writePersistedCache(memoryCache);
 }
 
+// --- Aggregate tallies --------------------------------------------------
+// Every country's counts are mirrored into aggregates/countryTallies so a
+// fetch costs 1 read instead of ~110. The per-country docs stay the source of
+// truth (older app versions only write those), and Firestore rules only
+// accept aggregate entries that equal their per-country doc. Once a day, one
+// verified client re-reads the per-country docs and repairs drifted entries.
+
+type Aggregate = { tallies?: Record<string, CountryTally>; syncedAt?: Timestamp };
+
+const RECONCILE_AFTER_MS = 24 * 60 * 60 * 1000;
+// Rules allow a claim once the last one is 23h old; the extra hour on the
+// read side absorbs client clock skew.
+const CLAIM_AFTER_MS = 23 * 60 * 60 * 1000;
+
+const aggregateRef = (firestore: Firestore) => doc(firestore, "aggregates", "countryTallies");
+
+const isStale = (data: Aggregate | null, afterMs: number) =>
+  !data?.syncedAt || Date.now() - data.syncedAt.toMillis() > afterMs;
+
+const sameCounts = (a: CountryTally | undefined, b: CountryTally) =>
+  !!a && a.upvotes === b.upvotes && a.downvotes === b.downvotes;
+
+const entryOf = (key: string, t: CountryTally) => ({
+  country: t.country ?? key,
+  upvotes: t.upvotes,
+  downvotes: t.downvotes,
+});
+
+async function readAllCountryTallies(firestore: Firestore): Promise<Record<string, CountryTally>> {
+  const snap = await getDocs(collection(firestore, "countryTallies"));
+  const tallies: Record<string, CountryTally> = {};
+  snap.forEach((docSnap) => {
+    const t = docSnap.data() as CountryTally;
+    if (typeof t.upvotes === "number" && typeof t.downvotes === "number") {
+      tallies[docSnap.id] = entryOf(docSnap.id, t);
+    }
+  });
+  return tallies;
+}
+
+function mirrorEntry(tx: Transaction, ref: DocumentReference, key: string, tally: CountryTally) {
+  tx.update(ref, new FieldPath("tallies", key), entryOf(key, tally), "changedKey", key, "updatedAt", serverTimestamp());
+}
+
+/** Claims the daily reconcile for this client, or returns null if it can't or someone else has it. */
+async function claimReconcile(firestore: Firestore): Promise<Aggregate | null> {
+  if (!auth?.currentUser?.emailVerified) return null;
+  const ref = aggregateRef(firestore);
+  try {
+    return await runTransaction(firestore, async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) {
+        tx.set(ref, { tallies: {}, syncedAt: serverTimestamp() });
+        return { tallies: {} };
+      }
+      const data = snap.data() as Aggregate;
+      if (!isStale(data, CLAIM_AFTER_MS)) return null;
+      tx.update(ref, { syncedAt: serverTimestamp() });
+      return data;
+    });
+  } catch {
+    return null;
+  }
+}
+
+/** Copies each drifted per-country tally into the aggregate, one key per write. */
+async function repairAggregate(
+  firestore: Firestore,
+  current: Record<string, CountryTally>,
+  truth: Record<string, CountryTally>
+): Promise<void> {
+  const ref = aggregateRef(firestore);
+  for (const [key, tally] of Object.entries(truth)) {
+    if (sameCounts(current[key], tally)) continue;
+    try {
+      await updateDoc(ref, new FieldPath("tallies", key), entryOf(key, tally), "changedKey", key, "updatedAt", serverTimestamp());
+    } catch {
+      // A vote on this country raced us; the next reconcile picks it up.
+    }
+  }
+}
+
+let pendingRepair: Promise<void> = Promise.resolve();
+/** Resolves once any background reconcile writes have finished (tests). */
+export const whenRepaired = () => pendingRepair;
+
+async function fetchTallies(firestore: Firestore): Promise<Record<string, CountryTally>> {
+  const snap = await getDoc(aggregateRef(firestore));
+  const data = snap.exists() ? (snap.data() as Aggregate) : null;
+  if (data && !isStale(data, RECONCILE_AFTER_MS)) return data.tallies ?? {};
+
+  const claimed = await claimReconcile(firestore);
+  if (claimed) {
+    const truth = await readAllCountryTallies(firestore);
+    pendingRepair = repairAggregate(firestore, claimed.tallies ?? {}, truth);
+    return truth;
+  }
+  // Stale, but another client is reconciling (or none can): still usable.
+  if (data) return data.tallies ?? {};
+  // No aggregate yet and this client can't create it.
+  return readAllCountryTallies(firestore);
+}
+
 export async function getAllTallies(
   force = false
 ): Promise<Record<string, CountryTally>> {
@@ -180,11 +288,7 @@ export async function getAllTallies(
   }
 
   try {
-    const snap = await getDocs(collection(db, "countryTallies"));
-    const tallies: Record<string, CountryTally> = {};
-    snap.forEach((docSnap) => {
-      tallies[docSnap.id] = docSnap.data() as CountryTally;
-    });
+    const tallies = await fetchTallies(db);
     const fresh = { tallies, fetchedAt: now };
     memoryCache = fresh;
     void writePersistedCache(fresh);
@@ -212,8 +316,9 @@ export async function castVote(
   const voterRef = doc(db, "countryVotes", key, "voters", uid);
 
   try {
+    const aggRef = aggregateRef(db);
     const result = await runTransaction(db, async (tx) => {
-      const [tallySnap, voterSnap] = await Promise.all([tx.get(tallyRef), tx.get(voterRef)]);
+      const [tallySnap, voterSnap, aggSnap] = await Promise.all([tx.get(tallyRef), tx.get(voterRef), tx.get(aggRef)]);
 
       const current: CountryTally = tallySnap.exists()
         ? (tallySnap.data() as CountryTally)
@@ -234,6 +339,8 @@ export async function castVote(
       const nextTally: CountryTally = { country, upvotes, downvotes };
       tx.set(tallyRef, { ...nextTally, updatedAt: serverTimestamp() }, { merge: true });
       tx.set(voterRef, { choice, updatedAt: serverTimestamp() });
+      // No aggregate yet: the reconcile will add this country.
+      if (aggSnap.exists()) mirrorEntry(tx, aggRef, key, nextTally);
 
       // isFirstVote is about the voter DOC ever having existed, not the
       // current choice — a retracted-then-recast vote must not re-earn XP.
@@ -262,8 +369,9 @@ export async function retractVote(uid: string, country: string): Promise<Country
   const voterRef = doc(db, "countryVotes", key, "voters", uid);
 
   try {
+    const aggRef = aggregateRef(db);
     const nextTally = await runTransaction(db, async (tx) => {
-      const [tallySnap, voterSnap] = await Promise.all([tx.get(tallyRef), tx.get(voterRef)]);
+      const [tallySnap, voterSnap, aggSnap] = await Promise.all([tx.get(tallyRef), tx.get(voterRef), tx.get(aggRef)]);
       if (!voterSnap.exists()) return null;
 
       const previousChoice = voterSnap.data().choice as StoredChoice;
@@ -280,6 +388,7 @@ export async function retractVote(uid: string, country: string): Promise<Country
       const updatedTally: CountryTally = { country, upvotes, downvotes };
       tx.set(tallyRef, { ...updatedTally, updatedAt: serverTimestamp() }, { merge: true });
       tx.set(voterRef, { choice: "none", updatedAt: serverTimestamp() });
+      if (aggSnap.exists()) mirrorEntry(tx, aggRef, key, updatedTally);
 
       return updatedTally;
     });
@@ -334,15 +443,18 @@ export async function deleteAllVotesForUser(uid: string): Promise<void> {
     const key = normalizeCountryKey(country);
     const tallyRef = doc(firestore, "countryTallies", key);
     const voterRef = doc(firestore, "countryVotes", key, "voters", uid);
+    const aggRef = aggregateRef(firestore);
     await runTransaction(firestore, async (tx) => {
-      const [tallySnap, voterSnap] = await Promise.all([tx.get(tallyRef), tx.get(voterRef)]);
+      const [tallySnap, voterSnap, aggSnap] = await Promise.all([tx.get(tallyRef), tx.get(voterRef), tx.get(aggRef)]);
       if (!voterSnap.exists()) return;
       const choice = voterSnap.data().choice as StoredChoice;
       if (tallySnap.exists() && (choice === "up" || choice === "down")) {
         const current = tallySnap.data() as CountryTally;
         const upvotes = Math.max(0, current.upvotes - (choice === "up" ? 1 : 0));
         const downvotes = Math.max(0, current.downvotes - (choice === "down" ? 1 : 0));
-        tx.set(tallyRef, { country: current.country ?? country, upvotes, downvotes, updatedAt: serverTimestamp() });
+        const nextTally = { country: current.country ?? country, upvotes, downvotes };
+        tx.set(tallyRef, { ...nextTally, updatedAt: serverTimestamp() });
+        if (aggSnap.exists()) mirrorEntry(tx, aggRef, key, nextTally);
         if (memoryCache) {
           memoryCache.tallies[key] = { country: current.country ?? country, upvotes, downvotes };
         }

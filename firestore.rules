@@ -5,7 +5,8 @@ rules_version = '2';
 // Collections
 // - users/{uid}            private progress backup (owner only)
 // - leaderboard/{uid}      public leaderboard row (opted-in, verified users)
-// - countryTallies/{key}   public vote counts per country
+// - countryTallies/{key}   public vote counts per country (authoritative)
+// - aggregates/countryTallies   all countries' counts in one doc (mirror)
 // - countryVotes/{key}/voters/{uid}   each user's own vote per country
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -66,8 +67,32 @@ service cloud.firestore {
       allow delete: if isOwner(userId);
     }
 
-    // Public vote tallies (one doc per country, ~110 total). Only mutated by
-    // the client transaction in lib/votes.ts that also writes the voter doc.
+    // --- Vote tallies -------------------------------------------------------
+    // A tally may only move by the caller's own vote, recorded in the same
+    // request: the change in counts must equal the change between the voter
+    // doc before (get) and after (getAfter) the request. Clients clamp at 0,
+    // so a decrement below zero must land on exactly 0.
+    function voterDoc(key) {
+      return /databases/$(database)/documents/countryVotes/$(key)/voters/$(request.auth.uid);
+    }
+    function choiceBefore(key) {
+      return exists(voterDoc(key)) ? get(voterDoc(key)).data.choice : "none";
+    }
+    function choiceAfter(key) {
+      return existsAfter(voterDoc(key)) ? getAfter(voterDoc(key)).data.choice : "none";
+    }
+    function delta(key, side) {
+      return (choiceAfter(key) == side ? 1 : 0) - (choiceBefore(key) == side ? 1 : 0);
+    }
+    function movedBy(before, d, after) {
+      return (before + d >= 0 && after == before + d) || (before + d < 0 && after == 0);
+    }
+    function countBefore(field) {
+      return resource == null ? 0 : resource.data[field];
+    }
+
+    // Public vote tallies (one doc per country, ~110 total). Authoritative
+    // counts; aggregates/countryTallies mirrors them for cheap reads.
     match /countryTallies/{countryKey} {
       allow read: if true;
 
@@ -76,7 +101,50 @@ service cloud.firestore {
                     && request.resource.data.country is string
                     && request.resource.data.country.size() <= 64
                     && boundedInt(request.resource.data.upvotes, 0, 100000000)
-                    && boundedInt(request.resource.data.downvotes, 0, 100000000);
+                    && boundedInt(request.resource.data.downvotes, 0, 100000000)
+                    && movedBy(countBefore("upvotes"), delta(countryKey, "up"), request.resource.data.upvotes)
+                    && movedBy(countBefore("downvotes"), delta(countryKey, "down"), request.resource.data.downvotes);
+
+      allow delete: if false;
+    }
+
+    // Every country's counts in one doc, so reading all of them costs 1 read.
+    //   { tallies: { <key>: {country, upvotes, downvotes} }, changedKey, updatedAt, syncedAt }
+    // Writes either mirror exactly one country from its authoritative tally
+    // (as it stands after the request), or claim the daily reconcile.
+    function tallyDoc(key) {
+      return /databases/$(database)/documents/countryTallies/$(key);
+    }
+    function isMirrorUpdate() {
+      let next = request.resource.data;
+      let k = next.changedKey;
+      let entry = next.tallies[k];
+      let source = getAfter(tallyDoc(k)).data;
+      return k is string
+          && k.matches("^[a-z0-9-]{1,64}$")
+          && next.diff(resource.data).affectedKeys().hasOnly(["tallies", "changedKey", "updatedAt"])
+          && next.updatedAt == request.time
+          && next.tallies.diff(resource.data.tallies).affectedKeys().hasOnly([k])
+          && entry.keys().hasOnly(["country", "upvotes", "downvotes"])
+          && entry.country is string
+          && entry.upvotes == source.upvotes
+          && entry.downvotes == source.downvotes;
+    }
+    function isReconcileClaim() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(["syncedAt"])
+          && request.resource.data.syncedAt == request.time
+          && resource.data.syncedAt < request.time - duration.value(23, "h");
+    }
+
+    match /aggregates/countryTallies {
+      allow read: if true;
+
+      allow create: if verified()
+                    && request.resource.data.keys().hasOnly(["tallies", "syncedAt"])
+                    && request.resource.data.tallies == {}
+                    && request.resource.data.syncedAt == request.time;
+
+      allow update: if verified() && (isMirrorUpdate() || isReconcileClaim());
 
       allow delete: if false;
     }
