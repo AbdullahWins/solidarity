@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { AppState } from "react-native";
 
+import { useAuth } from "../contexts/AuthContext";
 import {
   flushSync,
   markDirty,
@@ -9,104 +10,122 @@ import {
   toCloudSummary,
   type CloudUserSummary,
 } from "../lib/cloudSync";
-import { useAuth } from "../contexts/AuthContext";
 import type { GamificationState, ScanRecord } from "../lib/types";
 import { mergeMyVotesFromCloud } from "../lib/votes";
 
+// One shared store for every screen that uses this hook. Previously each
+// screen kept its own opt-in flag, so a stale copy on the Scan tab could push
+// leaderboardOptIn=false right after the user opted in on Profile, and the
+// first push after launch could run before the cloud copy had been read.
+type SyncState = {
+  uid: string | null;
+  /** True once the cloud copy for `uid` has been read (or found missing). */
+  pulled: boolean;
+  cloudSummary: CloudUserSummary | null;
+  leaderboardOptIn: boolean;
+};
+
+let state: SyncState = { uid: null, pulled: false, cloudSummary: null, leaderboardOptIn: false };
+const listeners = new Set<() => void>();
+const setState = (patch: Partial<SyncState>) => {
+  state = { ...state, ...patch };
+  listeners.forEach((l) => l());
+};
+const subscribe = (l: () => void) => {
+  listeners.add(l);
+  return () => listeners.delete(l);
+};
+const getSnapshot = () => state;
+
+let pullInFlight: Promise<void> | null = null;
+
+async function pull(uid: string) {
+  if (pullInFlight) return pullInFlight;
+  pullInFlight = (async () => {
+    const cloud = await pullSummary(uid);
+    if (state.uid !== uid) return; // signed out / switched while loading
+    if (cloud) void mergeMyVotesFromCloud(cloud.myVotes);
+    setState({ pulled: true, cloudSummary: cloud, leaderboardOptIn: cloud?.leaderboardOptIn ?? false });
+  })().finally(() => {
+    pullInFlight = null;
+  });
+  return pullInFlight;
+}
+
+// Flush pending work whenever the app is backgrounded. Registered once for
+// the app's lifetime, independent of which screens are mounted.
+AppState.addEventListener("change", (s) => {
+  if (s === "background" || s === "inactive") void flushSync();
+});
+
 export function useCloudSync(scans: ScanRecord[], gamification: GamificationState) {
   const { user, isFirebaseConfigured, emailVerified } = useAuth();
-  const [cloudSummary, setCloudSummary] = useState<CloudUserSummary | null>(null);
-  const [mergeNotice, setMergeNotice] = useState<string | null>(null);
-  const [leaderboardOptIn, setLeaderboardOptIn] = useState(false);
-  const hasPulledForUid = useRef<string | null>(null);
+  const sync = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
-  const pullCloudSummary = useCallback(async () => {
-    if (!user) return;
-    const cloud = await pullSummary(user.uid);
-    if (!cloud) return;
-
-    setCloudSummary(cloud);
-    setLeaderboardOptIn(cloud.leaderboardOptIn ?? false);
-    void mergeMyVotesFromCloud(cloud.myVotes);
-
-    if (cloud.xp > gamification.xp) {
-      setMergeNotice(
-        `Cloud backup has more progress (Level ${cloud.level}, ${cloud.xp} XP) than this device. Showing cloud stats until you scan again here.`
-      );
-    }
-  }, [user, gamification.xp]);
-
-  // Pull cloud state once per sign-in and decide whether to surface it.
+  // Track the signed-in user and read their cloud copy once per sign-in.
   useEffect(() => {
-    if (!user || hasPulledForUid.current === user.uid) return;
-    hasPulledForUid.current = user.uid;
-    void pullCloudSummary();
-  }, [user, pullCloudSummary]);
+    const uid = user?.uid ?? null;
+    if (state.uid === uid) return;
+    setState({ uid, pulled: false, cloudSummary: null, leaderboardOptIn: false });
+    if (uid) void pull(uid);
+  }, [user?.uid]);
 
-  // Push a debounced update whenever local scan-derived state changes.
+  // Debounced push whenever local progress changes, but never before the
+  // cloud copy has been read (otherwise it would overwrite the opt-in flag).
   useEffect(() => {
-    if (!user || !isFirebaseConfigured || scans.length === 0) return;
-    const optIn = leaderboardOptIn && emailVerified;
+    if (!user || !isFirebaseConfigured || !sync.pulled || sync.uid !== user.uid) return;
+    if (scans.length === 0 && gamification.voteCount === 0) return;
+    const optIn = sync.leaderboardOptIn && emailVerified;
     markDirty(async () => {
-      const summary = toCloudSummary(
-        user.uid,
-        user.displayName ?? "Scanner",
-        optIn,
-        scans,
-        gamification
-      );
-      await pushSummary(summary);
-      setCloudSummary(summary);
+      const summary = toCloudSummary(user.uid, user.displayName ?? "", optIn, scans, gamification);
+      if (await pushSummary(summary)) setState({ cloudSummary: summary });
     });
-  }, [user, isFirebaseConfigured, scans, gamification, leaderboardOptIn, emailVerified]);
+  }, [user, isFirebaseConfigured, sync.pulled, sync.uid, sync.leaderboardOptIn, scans, gamification, emailVerified]);
 
-  // Flush any pending sync when the app is backgrounded.
-  useEffect(() => {
-    const sub = AppState.addEventListener("change", (state) => {
-      if (state === "background" || state === "inactive") {
-        void flushSync();
+  const setOptIn = useCallback(
+    (value: boolean) => {
+      if (!user) return;
+      const effectiveValue = value && emailVerified;
+      const previous = state.leaderboardOptIn;
+      setState({ leaderboardOptIn: effectiveValue });
+      // User-initiated: push now (not via the debounce) and remove the public
+      // row on opt-out.
+      (async () => {
+        const summary = toCloudSummary(user.uid, user.displayName ?? "", effectiveValue, scans, gamification);
+        const ok = await pushSummary(summary, { removeFromLeaderboard: !effectiveValue });
+        if (ok) setState({ cloudSummary: summary });
+        else setState({ leaderboardOptIn: previous });
+      })();
+    },
+    [user, emailVerified, scans, gamification]
+  );
+
+  const refreshCloud = useCallback(async () => {
+    if (user) {
+      setState({ pulled: state.uid === user.uid && state.pulled });
+      await pull(user.uid);
+    }
+  }, [user]);
+
+  const cloud = sync.uid === user?.uid ? sync.cloudSummary : null;
+  const cloudAhead = !!cloud && cloud.xp > gamification.xp;
+  const displayGamification = cloudAhead
+    ? {
+        xp: cloud.xp,
+        level: cloud.level,
+        currentStreak: cloud.currentStreak,
+        longestStreak: cloud.longestStreak,
       }
-    });
-    return () => sub.remove();
-  }, []);
-
-  const setOptIn = (value: boolean) => {
-    const effectiveValue = value && emailVerified;
-    setLeaderboardOptIn(effectiveValue);
-    if (!user) return;
-    // Deliberate, infrequent, user-initiated toggle — push immediately
-    // rather than going through markDirty's 5-minute debounce (which exists
-    // to guard the passive scan-driven sync path, not settings changes the
-    // user is actively waiting to see take effect).
-    (async () => {
-      const summary = toCloudSummary(
-        user.uid,
-        user.displayName ?? "Scanner",
-        effectiveValue,
-        scans,
-        gamification
-      );
-      await pushSummary(summary);
-      setCloudSummary(summary);
-    })();
-  };
-
-  const displayGamification =
-    cloudSummary && cloudSummary.xp > gamification.xp
-      ? {
-          xp: cloudSummary.xp,
-          level: cloudSummary.level,
-          currentStreak: cloudSummary.currentStreak,
-          longestStreak: cloudSummary.longestStreak,
-        }
-      : null;
+    : null;
 
   return {
-    cloudSummary,
-    mergeNotice,
-    leaderboardOptIn,
+    cloudSummary: cloud,
+    mergeNotice: cloudAhead
+      ? `Your cloud backup has more progress (Level ${cloud.level}, ${cloud.xp} XP) than this device. Showing it until you scan here.`
+      : null,
+    leaderboardOptIn: sync.leaderboardOptIn,
     setOptIn,
     displayGamification,
-    refreshCloud: pullCloudSummary,
+    refreshCloud,
   };
 }

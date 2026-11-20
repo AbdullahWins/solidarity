@@ -1,84 +1,97 @@
 rules_version = '2';
 
-// Paste this into Firebase Console → Firestore Database → Rules → Publish.
+// Deploy: npx firebase deploy --only firestore --project <project-id>
 //
-// Data model: one document per signed-in user at users/{uid}, holding only
-// an aggregated gamification summary (xp, level, streaks, badges, daily scan
-// counts) — never raw scan/barcode data. See lib/cloudSync.ts.
-//
-// - Every user can read/write only their own document.
-// - Any signed-in user can read another user's document ONLY if that user
-//   opted into the public leaderboard (leaderboardOptIn == true) — this is
-//   what powers the leaderboard query in lib/cloudSync.ts (fetchLeaderboard).
-// - No one can read/write anything outside /users/{uid}.
+// Collections
+// - users/{uid}            private progress backup (owner only)
+// - leaderboard/{uid}      public leaderboard row (opted-in, verified users)
+// - countryTallies/{key}   public vote counts per country
+// - countryVotes/{key}/voters/{uid}   each user's own vote per country
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /users/{userId} {
-      allow get: if request.auth != null &&
-                    (request.auth.uid == userId || resource.data.leaderboardOptIn == true);
 
-      // Needed for the leaderboard's collection query (where leaderboardOptIn == true,
-      // orderBy xp desc). Firestore rules can't filter individual documents out of a
-      // "list" result by field value, so any signed-in user can technically issue a
-      // raw query — this is an accepted trade-off given the doc only ever contains
-      // non-sensitive aggregated stats (no email, no raw scan history).
-      allow list: if request.auth != null;
-
-      // leaderboardOptIn may only be set to true when the account's email is
-      // verified (request.auth.token.email_verified comes from the ID token,
-      // refreshed via reload()+getIdToken(true) client-side before writing).
-      allow create: if request.auth != null
-                    && request.auth.uid == userId
-                    && request.resource.data.uid == userId
-                    && (request.resource.data.leaderboardOptIn == false
-                        || request.auth.token.email_verified == true);
-
-      allow update: if request.auth != null
-                    && request.auth.uid == userId
-                    && request.resource.data.uid == userId
-                    && (request.resource.data.leaderboardOptIn == false
-                        || request.auth.token.email_verified == true);
-
-      allow delete: if request.auth != null && request.auth.uid == userId;
+    function signedIn() {
+      return request.auth != null;
+    }
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+    function verified() {
+      return signedIn() && request.auth.token.email_verified == true;
+    }
+    function boundedInt(v, lo, hi) {
+      return v is int && v >= lo && v <= hi;
     }
 
-    // Public, always-visible community vote tallies (one doc per country,
-    // ~80 total, never grows) — anyone (signed in or not) may read; only
-    // casting a vote (via the client's runTransaction in lib/votes.ts, which
-    // updates both this doc and the voter's own record together) can mutate
-    // it, and only by a signed-in + email-verified user.
+    // Private backup: aggregated progress only (never raw scans or barcodes),
+    // plus the user's own vote choices so they follow the account.
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+
+      // LEGACY (app <= 1.0.2 reads the leaderboard from this collection).
+      // Firestore checks the query's own filter against this condition, so
+      // only queries restricted to opted-in users are allowed, and documents
+      // of users who did not opt in can never be listed.
+      // TODO: remove once 1.0.2 usage is negligible (then also delete the
+      // composite index in firestore.indexes.json).
+      allow list: if signedIn() && resource.data.leaderboardOptIn == true;
+
+      allow create, update: if isOwner(userId)
+                    && request.resource.data.uid == userId
+                    && request.resource.data.displayName is string
+                    && request.resource.data.displayName.size() <= 60
+                    && (request.resource.data.leaderboardOptIn == false || verified());
+
+      allow delete: if isOwner(userId);
+    }
+
+    // Public leaderboard: only what the leaderboard screen shows.
+    match /leaderboard/{userId} {
+      allow read: if true;
+
+      allow create, update: if isOwner(userId)
+                    && verified()
+                    && request.resource.data.keys().hasOnly(
+                         ["uid", "displayName", "xp", "level", "currentStreak", "longestStreak", "updatedAt"])
+                    && request.resource.data.uid == userId
+                    && request.resource.data.displayName is string
+                    && request.resource.data.displayName.size() > 0
+                    && request.resource.data.displayName.size() <= 30
+                    && boundedInt(request.resource.data.xp, 0, 10000000)
+                    && boundedInt(request.resource.data.level, 1, 50)
+                    && boundedInt(request.resource.data.currentStreak, 0, 100000)
+                    && boundedInt(request.resource.data.longestStreak, 0, 100000)
+                    && request.resource.data.updatedAt == request.time;
+
+      allow delete: if isOwner(userId);
+    }
+
+    // Public vote tallies (one doc per country, ~110 total). Only mutated by
+    // the client transaction in lib/votes.ts that also writes the voter doc.
     match /countryTallies/{countryKey} {
       allow read: if true;
 
-      allow create, update: if request.auth != null
-                    && request.auth.token.email_verified == true
+      allow create, update: if verified()
+                    && request.resource.data.keys().hasOnly(["country", "upvotes", "downvotes", "updatedAt"])
                     && request.resource.data.country is string
-                    && request.resource.data.upvotes is int
-                    && request.resource.data.downvotes is int
-                    && request.resource.data.upvotes >= 0
-                    && request.resource.data.downvotes >= 0
-                    && request.resource.data.keys().hasOnly(["country", "upvotes", "downvotes", "updatedAt"]);
+                    && request.resource.data.country.size() <= 64
+                    && boundedInt(request.resource.data.upvotes, 0, 100000000)
+                    && boundedInt(request.resource.data.downvotes, 0, 100000000);
 
       allow delete: if false;
     }
 
-    // Per-user, per-country vote record — only that user may read/write
-    // their own vote; requires a verified email, matching the tally rule
-    // above so the two writes in the client transaction are governed by
-    // the same auth precondition. "none" is a retraction tombstone (see
-    // lib/votes.ts retractVote) — the doc is never deleted so a user can't
-    // farm first-vote XP by retracting and re-voting on the same country.
+    // Each user's vote per country. "none" is a retraction tombstone.
+    // Owners may delete their own records (account deletion).
     match /countryVotes/{countryKey}/voters/{uid} {
-      allow read: if request.auth != null && request.auth.uid == uid;
-      allow create, update: if request.auth != null
-                    && request.auth.uid == uid
-                    && request.auth.token.email_verified == true
-                    && request.resource.data.choice in ["up", "down", "none"]
-                    && request.resource.data.keys().hasOnly(["choice", "updatedAt"]);
-      allow delete: if false;
+      allow read: if isOwner(uid);
+      allow create, update: if isOwner(uid)
+                    && verified()
+                    && request.resource.data.keys().hasOnly(["choice", "updatedAt"])
+                    && request.resource.data.choice in ["up", "down", "none"];
+      allow delete: if isOwner(uid);
     }
 
-    // Deny everything else by default.
     match /{document=**} {
       allow read, write: if false;
     }

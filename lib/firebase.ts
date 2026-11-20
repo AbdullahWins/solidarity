@@ -1,6 +1,9 @@
-import { getApps, initializeApp } from "firebase/app";
-import { getAuth, type Auth } from "firebase/auth";
-import { initializeFirestore, type Firestore } from "firebase/firestore";
+import ReactNativeAsyncStorage from "@react-native-async-storage/async-storage";
+import { getApp, getApps, initializeApp, type FirebaseApp } from "firebase/app";
+import * as FirebaseAuth from "firebase/auth";
+import { getAuth, initializeAuth, type Auth, type Persistence } from "firebase/auth";
+import { getFirestore, initializeFirestore, type Firestore } from "firebase/firestore";
+import { Platform } from "react-native";
 
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
@@ -13,21 +16,41 @@ const firebaseConfig = {
 
 export const isFirebaseConfigured = Boolean(firebaseConfig.apiKey && firebaseConfig.projectId);
 
+// `getReactNativePersistence` only exists in the React Native build of
+// firebase/auth (resolved through the "react-native" export condition), so
+// it's absent from the default type definitions.
+type RNAuthModule = { getReactNativePersistence?: (storage: unknown) => Persistence };
+
+function createAuth(app: FirebaseApp): Auth {
+  if (Platform.OS === "web") return getAuth(app);
+  const getRNPersistence = (FirebaseAuth as unknown as RNAuthModule).getReactNativePersistence;
+  try {
+    // Without an explicit persistence, the RN build of getAuth() falls back to
+    // in-memory storage and users are signed out on every cold start.
+    return initializeAuth(app, getRNPersistence ? { persistence: getRNPersistence(ReactNativeAsyncStorage) } : {});
+  } catch {
+    // Already initialised (Fast Refresh re-evaluates this module).
+    return getAuth(app);
+  }
+}
+
+function createFirestore(app: FirebaseApp): Firestore {
+  try {
+    // RN's networking layer breaks Firestore's default WebChannel streaming;
+    // long polling is the documented workaround for React Native.
+    return initializeFirestore(app, { experimentalForceLongPolling: Platform.OS !== "web" });
+  } catch {
+    return getFirestore(app);
+  }
+}
+
 let auth: Auth | null = null;
 let db: Firestore | null = null;
 
 if (isFirebaseConfigured) {
-  const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
-
-  // getAuth auto-detects AsyncStorage for persistence on React Native
-  // (no getReactNativePersistence call needed since firebase-js-sdk v10.18+).
-  auth = getAuth(app);
-
-  // RN's networking layer breaks Firestore's default WebChannel transport;
-  // long polling is the documented workaround for React Native.
-  db = initializeFirestore(app, {
-    experimentalForceLongPolling: true,
-  });
+  const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+  auth = createAuth(app);
+  db = createFirestore(app);
 }
 
 export { auth, db };

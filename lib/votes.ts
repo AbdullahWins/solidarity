@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   collection,
   doc,
+  getDoc,
   getDocs,
   runTransaction,
   serverTimestamp,
@@ -37,6 +38,7 @@ const NON_VOTABLE_COUNTRIES = new Set([
   "gs1 global office",
   "epc",
   "gs1 uk",
+  "unknown",
 ]);
 
 export function normalizeCountryKey(country: string): string {
@@ -291,4 +293,64 @@ export async function retractVote(uid: string, country: string): Promise<Country
   } catch {
     return null;
   }
+}
+
+/** Forget this device's record of the signed-in user's votes (sign-out). */
+export async function clearMyVotes(): Promise<void> {
+  myVotesCache = {};
+  try {
+    await AsyncStorage.removeItem(MY_VOTES_KEY);
+  } catch {
+    // best-effort only
+  }
+}
+
+/**
+ * Account deletion: removes every vote this user ever cast. Active votes are
+ * subtracted from the public tally, and the per-user voter docs (including
+ * "none" tombstones) are deleted, so nothing keyed by the uid is left behind.
+ *
+ * Checks every votable country rather than the local cache, because votes may
+ * have been cast from another device. ~110 single-doc reads, once.
+ */
+export async function deleteAllVotesForUser(uid: string): Promise<void> {
+  if (!isFirebaseConfigured || !db) return;
+  const firestore = db;
+  const countries = getVotableCountryNames();
+
+  const existing: string[] = [];
+  const BATCH = 20;
+  for (let i = 0; i < countries.length; i += BATCH) {
+    const slice = countries.slice(i, i + BATCH);
+    const snaps = await Promise.all(
+      slice.map((country) => getDoc(doc(firestore, "countryVotes", normalizeCountryKey(country), "voters", uid)))
+    );
+    snaps.forEach((snap, idx) => {
+      if (snap.exists()) existing.push(slice[idx]);
+    });
+  }
+
+  for (const country of existing) {
+    const key = normalizeCountryKey(country);
+    const tallyRef = doc(firestore, "countryTallies", key);
+    const voterRef = doc(firestore, "countryVotes", key, "voters", uid);
+    await runTransaction(firestore, async (tx) => {
+      const [tallySnap, voterSnap] = await Promise.all([tx.get(tallyRef), tx.get(voterRef)]);
+      if (!voterSnap.exists()) return;
+      const choice = voterSnap.data().choice as StoredChoice;
+      if (tallySnap.exists() && (choice === "up" || choice === "down")) {
+        const current = tallySnap.data() as CountryTally;
+        const upvotes = Math.max(0, current.upvotes - (choice === "up" ? 1 : 0));
+        const downvotes = Math.max(0, current.downvotes - (choice === "down" ? 1 : 0));
+        tx.set(tallyRef, { country: current.country ?? country, upvotes, downvotes, updatedAt: serverTimestamp() });
+        if (memoryCache) {
+          memoryCache.tallies[key] = { country: current.country ?? country, upvotes, downvotes };
+        }
+      }
+      tx.delete(voterRef);
+    });
+  }
+
+  if (memoryCache) await writePersistedCache(memoryCache);
+  await clearMyVotes();
 }

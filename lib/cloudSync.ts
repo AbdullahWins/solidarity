@@ -1,5 +1,6 @@
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -8,7 +9,6 @@ import {
   query,
   serverTimestamp,
   setDoc,
-  where,
   type Timestamp,
 } from "firebase/firestore";
 
@@ -17,6 +17,7 @@ import { buildDailyCounts, computeScanStats } from "./gamification";
 import type { GamificationState, ScanRecord } from "./types";
 import { getCachedMyVotes, type VoteChoice } from "./votes";
 
+/** Private per-user backup at users/{uid}. Readable only by its owner. */
 export type CloudUserSummary = {
   uid: string;
   displayName: string;
@@ -38,8 +39,25 @@ export type CloudUserSummary = {
   schemaVersion: 1;
 };
 
+/** Public leaderboard row at leaderboard/{uid}. Only what the leaderboard shows. */
+export type LeaderboardEntry = {
+  uid: string;
+  displayName: string;
+  xp: number;
+  level: number;
+  currentStreak: number;
+  longestStreak: number;
+  updatedAt?: Timestamp;
+};
+
+export const MAX_DISPLAY_NAME = 30;
 const DAILY_COUNTS_WINDOW_DAYS = 120;
-const MIN_SYNC_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const MIN_SYNC_INTERVAL_MS = 5 * 60 * 1000;
+
+export const sanitizeDisplayName = (name: string | null | undefined): string => {
+  const cleaned = (name ?? "").replace(/\s+/g, " ").trim().slice(0, MAX_DISPLAY_NAME);
+  return cleaned || "Scanner";
+};
 
 const pruneDailyCounts = (counts: Record<string, number>): Record<string, number> => {
   const cutoff = new Date();
@@ -62,7 +80,7 @@ export function toCloudSummary(
   const stats = computeScanStats(scans);
   return {
     uid,
-    displayName,
+    displayName: sanitizeDisplayName(displayName),
     leaderboardOptIn,
     xp: gamification.xp,
     level: gamification.level,
@@ -81,16 +99,37 @@ export function toCloudSummary(
   };
 }
 
-export async function pushSummary(summary: CloudUserSummary): Promise<void> {
-  if (!isFirebaseConfigured || !db) return;
+const toLeaderboardEntry = (s: CloudUserSummary) => ({
+  uid: s.uid,
+  displayName: s.displayName,
+  xp: s.xp,
+  level: s.level,
+  currentStreak: s.currentStreak,
+  longestStreak: s.longestStreak,
+  updatedAt: serverTimestamp(),
+});
+
+/**
+ * Writes the private backup, and mirrors (or removes) the public leaderboard
+ * row. `removeFromLeaderboard` is only set on an explicit opt-out so the
+ * passive scan sync never spends a delete write it doesn't need.
+ */
+export async function pushSummary(
+  summary: CloudUserSummary,
+  options: { removeFromLeaderboard?: boolean } = {}
+): Promise<boolean> {
+  if (!isFirebaseConfigured || !db) return false;
   try {
-    await setDoc(
-      doc(db, "users", summary.uid),
-      { ...summary, updatedAt: serverTimestamp() },
-      { merge: true }
-    );
-  } catch {
-    // best-effort only — local storage remains the source of truth
+    await setDoc(doc(db, "users", summary.uid), { ...summary, updatedAt: serverTimestamp() }, { merge: true });
+    if (summary.leaderboardOptIn) {
+      await setDoc(doc(db, "leaderboard", summary.uid), toLeaderboardEntry(summary));
+    } else if (options.removeFromLeaderboard) {
+      await deleteDoc(doc(db, "leaderboard", summary.uid));
+    }
+    return true;
+  } catch (err) {
+    if (__DEV__) console.warn("pushSummary failed:", err);
+    return false;
   }
 }
 
@@ -104,30 +143,28 @@ export async function pullSummary(uid: string): Promise<CloudUserSummary | null>
   }
 }
 
-export async function fetchLeaderboard(topN = 100): Promise<CloudUserSummary[]> {
+export async function fetchLeaderboard(topN = 100): Promise<LeaderboardEntry[]> {
   if (!isFirebaseConfigured || !db) return [];
   try {
-    const q = query(
-      collection(db, "users"),
-      where("leaderboardOptIn", "==", true),
-      orderBy("xp", "desc"),
-      limit(topN)
-    );
-    const snap = await getDocs(q);
-    return snap.docs.map((d) => d.data() as CloudUserSummary);
+    const snap = await getDocs(query(collection(db, "leaderboard"), orderBy("xp", "desc"), limit(topN)));
+    return snap.docs.map((d) => d.data() as LeaderboardEntry);
   } catch (err) {
-    // Diagnostic only — a missing Firestore composite index (common on
-    // first use of this exact where+orderBy combo) throws an error whose
-    // message includes a one-click link to create it; that's easy to miss
-    // if this is swallowed completely.
-    console.warn("fetchLeaderboard failed:", err);
+    if (__DEV__) console.warn("fetchLeaderboard failed:", err);
     return [];
   }
 }
 
+/** Removes the public leaderboard row and the private backup. */
+export async function deleteCloudProfile(uid: string): Promise<void> {
+  if (!db) return;
+  await deleteDoc(doc(db, "leaderboard", uid));
+  await deleteDoc(doc(db, "users", uid));
+}
+
 // --- Debounced sync scheduler -------------------------------------------
-// Guards Firestore's shared 20K writes/day free-tier budget: only pushes
-// when local state actually changed AND at most once per MIN_SYNC_INTERVAL_MS.
+// Guards Firestore's free-tier write budget: only pushes when local state
+// actually changed, and at most once per MIN_SYNC_INTERVAL_MS. Anything
+// pending is flushed when the app goes to the background.
 
 let dirty = false;
 let lastSyncAt = 0;
@@ -136,19 +173,21 @@ let pendingPush: (() => Promise<void>) | null = null;
 export function markDirty(pushFn: () => Promise<void>) {
   dirty = true;
   pendingPush = pushFn;
-  maybeFlush();
+  if (Date.now() - lastSyncAt >= MIN_SYNC_INTERVAL_MS) void flushSync();
 }
 
 export async function flushSync(): Promise<void> {
   if (!dirty || !pendingPush) return;
   const push = pendingPush;
   dirty = false;
+  pendingPush = null;
   lastSyncAt = Date.now();
   await push();
 }
 
-function maybeFlush() {
-  if (Date.now() - lastSyncAt >= MIN_SYNC_INTERVAL_MS) {
-    void flushSync();
-  }
+/** Drop anything queued (sign-out / account deletion). */
+export function resetSync() {
+  dirty = false;
+  pendingPush = null;
+  lastSyncAt = 0;
 }
