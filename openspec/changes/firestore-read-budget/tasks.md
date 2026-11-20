@@ -25,4 +25,4 @@
 
 - [x] 5.1 Add `aggregates/countryTallies` to the README collections table, along with the rules-deploy-first note. Verify by reading the README.
 - [x] 5.2 Run `npm run verify` and `npm run test:rules`. Verify that both pass.
-- [ ] 5.3 Deploy the rules (`npx firebase deploy --only firestore`) before releasing the app, after confirming with the owner. Verify that the Firebase console shows the new rules and that a vote from the current store build still succeeds.
+- [x] 5.3 Deploy the rules (`npx firebase deploy --only firestore`) before releasing the app, after confirming with the owner. Deployed to solidarity-nadesoft on 2026-11-21 (compiled and released). Still worth confirming a vote from the 1.1.0 store build succeeds.
