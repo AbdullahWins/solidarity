@@ -68,4 +68,4 @@ Each screen SHALL present one primary piece of information or action prominently
 
 #### Scenario: Scan tab at rest
 - **WHEN** the Scan tab is shown with no result
-- **THEN** only the camera (or permission prompt) and a "Type a code instead" link are shown
+- **THEN** only the camera (or permission prompt) and one row of three equal controls (Basket, Photo, Type code) are shown
