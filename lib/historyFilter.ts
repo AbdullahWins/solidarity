@@ -27,7 +27,7 @@ function periodStart(period: PeriodFilter, now: Date): number {
 export const isFiltered = (f: HistoryFilter) => f.query.trim() !== "" || f.tone !== "all" || f.period !== "all";
 
 /**
- * Case-insensitive search over country, product name, brand and barcode
+ * Case-insensitive search over country, product name, brand, owner and barcode
  * digits, combined with verdict and period filters.
  */
 export function filterScans(scans: ScanRecord[], filter: HistoryFilter, now = new Date()): ScanRecord[] {
@@ -40,6 +40,6 @@ export function filterScans(scans: ScanRecord[], filter: HistoryFilter, now = ne
     if (Date.parse(s.scannedAt) < from) return false;
     if (!q) return true;
     if (searchDigits && s.code.includes(digits)) return true;
-    return [s.country, s.productName, s.brand].some((v) => v?.toLowerCase().includes(q));
+    return [s.country, s.productName, s.brand, s.owner].some((v) => v?.toLowerCase().includes(q));
   });
 }

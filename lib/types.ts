@@ -13,6 +13,10 @@ export type ScanRecord = {
   /** From Open Food Facts, when product names are on and it was found. */
   productName?: string;
   brand?: string;
+  /** Parent company from Open Food Facts, when it differs from the brand. */
+  owner?: string;
+  /** Most specific Open Food Facts category tags, used for alternatives. */
+  categories?: string[];
 };
 
 export type GamificationState = {

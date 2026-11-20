@@ -85,3 +85,12 @@ test("scans read from a photo are accepted", () => {
   withPhoto.scans.push(scan("p", 4, { source: "photo" }));
   expect(parseBackup(JSON.stringify(withPhoto)).scans.map((s) => s.source)).toContain("photo");
 });
+
+test("owner and categories survive a backup; bad categories are rejected", () => {
+  const f = JSON.parse(file());
+  f.scans[0].owner = "Nestlé";
+  f.scans[0].categories = ["en:chocolates"];
+  expect(parseBackup(JSON.stringify(f)).scans[0]).toMatchObject({ owner: "Nestlé", categories: ["en:chocolates"] });
+  f.scans[0].categories = ["<b>"];
+  expect(() => parseBackup(JSON.stringify(f))).toThrow(/damaged/);
+});

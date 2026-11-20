@@ -24,7 +24,7 @@ import { isDemo } from "../../lib/demo";
 import { hapticBasketAdd, hapticSelection, hapticVerdict } from "../../lib/haptics";
 import { getCachedPreferences } from "../../lib/preferences";
 import { planPhoto, scanImage, type FoundCode } from "../../lib/photoScan";
-import { lookupProduct } from "../../lib/productLookup";
+import { lookupProduct, productPatch } from "../../lib/productLookup";
 import { countryForPrefix } from "../../lib/scan-logic";
 import type { ScanRecord, ScanSource } from "../../lib/types";
 import { openCountry } from "../../lib/navigation";
@@ -144,7 +144,7 @@ export function ScanScreen() {
 
   const latestRecord = latest?.record ?? null;
   const product = useProductLookup(latestRecord?.code ?? null, preferences.productLookup === "on", (found) => {
-    if (latestRecord) void updateScan(latestRecord.id, { productName: found.product.name, brand: found.product.brand });
+    if (latestRecord) void updateScan(latestRecord.id, productPatch(found.product));
   });
 
   const onRefresh = async () => {
@@ -191,8 +191,8 @@ export function ScanScreen() {
             if (getCachedPreferences().productLookup === "on" && isVotableCountry(country) && !isDemo()) {
               void lookupProduct(parsed.code).then((found) => {
                 if (found.status !== "found") return;
-                void updateBasketItem(parsed.code, { productName: found.product.name ?? found.product.brand });
-                void updateScan(result.record.id, { productName: found.product.name, brand: found.product.brand });
+                void updateBasketItem(parsed.code, { productName: found.product.name ?? found.product.brand, owner: found.product.owner });
+                void updateScan(result.record.id, productPatch(found.product));
               });
             }
           }

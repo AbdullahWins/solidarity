@@ -70,7 +70,7 @@ const SAMPLE = [
 // A few scans carry product names, as they would with product names on.
 const PRODUCTS = [
   { productName: "Sparkling mineral water 1 l", brand: "Demo Springs" },
-  { productName: "Dark chocolate 70%", brand: "Cacao Demo" },
+  { productName: "Dark chocolate 70%", brand: "Cacao Demo", owner: "Demo Foods Group", categories: ["en:dark-chocolates"] },
   { productName: "Wholegrain crackers", brand: "Field & Oven" },
   { productName: "Green tea, 20 bags", brand: "Leaf Demo" },
 ];

@@ -74,7 +74,7 @@ export function ProductRow({ code, consent, state, onConsent }: Props) {
     );
   }
 
-  const { name, brand, image } = state.product;
+  const { name, brand, image, owner } = state.product;
   return (
     <View style={styles.found}>
       <View style={styles.row}>
@@ -92,6 +92,11 @@ export function ProductRow({ code, consent, state, onConsent }: Props) {
           {name && brand ? (
             <Text style={styles.brand} numberOfLines={1}>
               {brand}
+            </Text>
+          ) : null}
+          {owner ? (
+            <Text style={styles.owner} numberOfLines={1}>
+              Owned by <Text style={styles.ownerName}>{owner}</Text>
             </Text>
           ) : null}
         </View>
@@ -140,6 +145,15 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.subtext,
     marginTop: 2,
+  },
+  owner: {
+    ...typography.caption,
+    color: colors.subtext,
+    marginTop: 2,
+  },
+  ownerName: {
+    color: colors.text,
+    fontWeight: "700",
   },
   attribution: {
     flexDirection: "row",

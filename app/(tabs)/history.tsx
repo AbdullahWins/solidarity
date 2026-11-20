@@ -81,7 +81,7 @@ function HistoryRow({ item, last }: { item: ScanRecord; last: boolean }) {
         </Text>
         {item.productName ? (
           <Text style={styles.historySub} numberOfLines={1}>
-            {[item.brand, item.country].filter(Boolean).join(" · ")}
+            {[item.brand, item.owner && `owned by ${item.owner}`, item.country].filter(Boolean).join(" · ")}
           </Text>
         ) : (
           <Text style={styles.historyCode}>{item.code}</Text>

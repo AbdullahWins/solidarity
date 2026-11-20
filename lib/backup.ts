@@ -71,7 +71,12 @@ function validScan(v: unknown): v is ScanRecord {
     !Number.isNaN(Date.parse(s.scannedAt)) &&
     (s.rule === undefined || s.rule === "avoid" || s.rule === "support") &&
     (s.productName === undefined || (isString(s.productName) && s.productName.length <= 200)) &&
-    (s.brand === undefined || (isString(s.brand) && s.brand.length <= 200))
+    (s.brand === undefined || (isString(s.brand) && s.brand.length <= 200)) &&
+    (s.owner === undefined || (isString(s.owner) && s.owner.length <= 200)) &&
+    (s.categories === undefined ||
+      (Array.isArray(s.categories) &&
+        s.categories.length <= 5 &&
+        s.categories.every((c) => isString(c) && /^en:[a-z0-9-]{1,80}$/.test(c))))
   );
 }
 
@@ -103,8 +108,8 @@ export function parseBackup(text: string, sizeBytes = text.length): Backup {
   }
   // Keep only the scan fields we know about.
   const scans = data.scans.map(
-    ({ id, code, country, isPositive, source, scannedAt, rule, productName, brand }) =>
-      ({ id, code, country, isPositive, source, scannedAt, rule, productName, brand }) as ScanRecord
+    ({ id, code, country, isPositive, source, scannedAt, rule, productName, brand, owner, categories }) =>
+      ({ id, code, country, isPositive, source, scannedAt, rule, productName, brand, owner, categories }) as ScanRecord
   );
   return {
     app: BACKUP_APP,

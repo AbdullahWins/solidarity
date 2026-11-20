@@ -22,3 +22,9 @@ test("updateScan patches only the given record", async () => {
   expect(a).toMatchObject({ id: "a", productName: "Stabilo pen", brand: "Stabilo" });
   expect(b.productName).toBeUndefined();
 });
+
+test("updateScan saves owner and categories", async () => {
+  await addScan(scan("c"));
+  await updateScan("c", { owner: "Nestlé", categories: ["en:chocolates"] });
+  expect((await getScans()).find((s) => s.id === "c")).toMatchObject({ owner: "Nestlé", categories: ["en:chocolates"] });
+});

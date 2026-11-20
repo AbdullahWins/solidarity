@@ -6,6 +6,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import {
   buildLookupUrl,
+  normalizeName,
   CACHE_LIMIT,
   cacheProduct,
   getCachedProduct,
@@ -29,7 +30,7 @@ beforeEach(async () => {
 test("the request carries only the barcode and requested fields", () => {
   const url = buildLookupUrl(CODE, "android");
   expect(url).toBe(
-    `https://world.openfoodfacts.org/api/v2/product/${CODE}?fields=product_name,brands,image_front_small_url`
+    `https://world.openfoodfacts.org/api/v2/product/${CODE}?fields=product_name,brands,image_front_small_url,brand_owner,categories_tags`
   );
   expect(buildLookupUrl(CODE, "web")).toContain("&app_name=Solidarity");
 });
@@ -105,4 +106,36 @@ test("the cache keeps at most 1,000 entries, evicting the oldest", async () => {
   }
   expect(await getCachedProduct("0", 2000)).toBeNull();
   expect(await getCachedProduct(String(CACHE_LIMIT), 2000)).not.toBeNull();
+});
+
+test("parses the brand owner and the most specific categories", () => {
+  const r = parseLookupResponse({
+    status: 1,
+    product: {
+      product_name: "KitKat",
+      brands: "KitKat",
+      brand_owner: "Nestlé",
+      categories_tags: ["en:snacks", "en:sweet-snacks", "en:chocolates", "fr:barres", "en:a", "en:b", "en:wafers"],
+    },
+  });
+  expect(r).toEqual({
+    status: "found",
+    product: {
+      name: "KitKat",
+      brand: "KitKat",
+      image: undefined,
+      owner: "Nestlé",
+      categories: ["en:sweet-snacks", "en:chocolates", "en:a", "en:b", "en:wafers"],
+    },
+  });
+});
+
+test("an owner that is just the brand again is dropped", () => {
+  const r = parseLookupResponse({ status: 1, product: { product_name: "X", brands: "Ferrero", brand_owner: "FERRERO" } });
+  expect(r.status === "found" && r.product.owner).toBeFalsy();
+});
+
+test("names normalise case, accents and punctuation", () => {
+  expect(normalizeName("Nestlé S.A.")).toBe("nestle-s-a");
+  expect(normalizeName("  NESTLE  s a ")).toBe("nestle-s-a");
 });

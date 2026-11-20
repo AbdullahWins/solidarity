@@ -6,7 +6,7 @@
 
 ## 2. UI
 
-- [x] 2.1 Add `source: "photo"` to `ScanRecord`, accept it in backup validation, and show an image icon for it in History and on the country screen. Verify with `npm run verify` and a backup test case using "photo".
+- [x] 2.1 Add `source: "photo"` to `ScanRecord`, accept it in backup validation, and show an image icon for it on the country screen (History rows show no source). Verify with `npm run verify` and a backup test case using "photo".
 - [x] 2.2 Add the "From photo" action to the Scan tab with the 0 / 1 / many flows (design D3), including basket mode. Verify by unit-testing the flow choice and with a web demo screenshot of the action.
 
 ## 3. Docs and verification

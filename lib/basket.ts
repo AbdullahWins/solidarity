@@ -14,6 +14,7 @@ export type BasketItem = {
   country: string;
   tone: Tone;
   productName?: string;
+  owner?: string;
   addedAt: number;
 };
 
@@ -92,7 +93,7 @@ export async function addToBasket(item: Omit<BasketItem, "addedAt">, now = Date.
   return true;
 }
 
-export async function updateBasketItem(code: string, patch: Partial<Pick<BasketItem, "productName" | "tone">>): Promise<void> {
+export async function updateBasketItem(code: string, patch: Partial<Pick<BasketItem, "productName" | "owner" | "tone">>): Promise<void> {
   if (!hasCode(code)) return;
   await commit({ ...state, items: state.items.map((i) => (i.code === code ? { ...i, ...patch } : i)) });
 }

@@ -10,7 +10,7 @@ const now = new Date(2026, 10, 20, 15, 0); // local time
 const at = (daysAgo: number, hour = 10) => new Date(2026, 10, 20 - daysAgo, hour).toISOString();
 
 const scans: ScanRecord[] = [
-  { id: "1", code: "3017620422003", country: "France", isPositive: true, source: "camera", scannedAt: at(0), productName: "Nutella", brand: "Ferrero" },
+  { id: "1", code: "3017620422003", country: "France", isPositive: true, source: "camera", scannedAt: at(0), productName: "Nutella", brand: "Nutella", owner: "Ferrero" },
   { id: "2", code: "4006381333931", country: "Germany", isPositive: false, source: "camera", scannedAt: at(3) },
   { id: "3", code: "5601234567892", country: "Portugal", isPositive: false, source: "manual", scannedAt: at(10), rule: "support" },
   { id: "4", code: "9771234567003", country: "Serial publications (ISSN)", isPositive: true, source: "camera", scannedAt: at(40) },
