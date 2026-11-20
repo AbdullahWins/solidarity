@@ -184,7 +184,28 @@ const SCREENS = [
     },
   },
   { id: "04d-basket-summary", label: "Basket summary", path: "/basket" },
+  {
+    id: "04e-barcode-info",
+    label: "What this barcode tells you",
+    path: "/",
+    act: async (page) => {
+      await page.getByText("Type a code instead", { exact: true }).click();
+      await page.getByPlaceholder("e.g. 4006381333931").fill(ean("560", "123456789"));
+      await page.getByText("Look up", { exact: true }).click();
+      await page.waitForTimeout(800);
+      await page.getByLabel("What this barcode tells you").click();
+    },
+  },
   { id: "05-history", label: "History", path: "/history" },
+  {
+    id: "05b-history-filtered",
+    label: "History, filtered",
+    path: "/history",
+    act: async (page) => {
+      await page.getByPlaceholder("Search country, product or barcode").fill("portugal");
+      await page.getByText("30 days", { exact: true }).click();
+    },
+  },
   { id: "06-community", label: "Community", path: "/community" },
   {
     id: "06b-leaderboard",

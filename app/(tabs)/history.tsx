@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { AccountButton } from "../../components/navigation/AccountButton";
 import { ShareStatsButton } from "../../components/share/ShareStatsButton";
@@ -11,6 +11,7 @@ import { Donut } from "../../components/ui/Donut";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { Flag } from "../../components/ui/Flag";
 import { Screen } from "../../components/ui/Screen";
+import { SearchField } from "../../components/ui/SearchField";
 import { SectionHeader } from "../../components/ui/SectionHeader";
 import { StatTile } from "../../components/ui/StatTile";
 import { colors, radius, spacing, typography } from "../../constants/theme";
@@ -18,10 +19,32 @@ import { useLayout } from "../../hooks/useLayout";
 import { usePreferences } from "../../hooks/usePreferences";
 import { useScanHistory } from "../../hooks/useScanHistory";
 import { buildDailyCounts } from "../../lib/gamification";
+import { hapticSelection } from "../../lib/haptics";
+import {
+  filterScans,
+  isFiltered,
+  NO_FILTER,
+  toneOf,
+  type PeriodFilter,
+  type ToneFilter,
+} from "../../lib/historyFilter";
 import { openCountry } from "../../lib/navigation";
 import type { ScanRecord } from "../../lib/types";
 
 const RECENT_LIMIT = 40;
+
+const TONES: { key: ToneFilter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "fine", label: "Fine" },
+  { key: "avoid", label: "Avoid" },
+  { key: "neutral", label: "Neutral" },
+];
+const PERIODS: { key: PeriodFilter; label: string }[] = [
+  { key: "all", label: "Any time" },
+  { key: "today", label: "Today" },
+  { key: "7d", label: "7 days" },
+  { key: "30d", label: "30 days" },
+];
 
 const dayKey = (iso: string) => new Date(iso).toLocaleDateString("en-CA");
 
@@ -39,8 +62,10 @@ const timeOf = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { ho
 
 function HistoryRow({ item, last }: { item: ScanRecord; last: boolean }) {
   // A personal rule at scan time leads; otherwise the community verdict then.
-  const positive = item.rule ? item.rule === "support" : item.isPositive;
-  const label = item.rule ? (item.rule === "support" ? "Support" : "Avoid") : positive ? "Positive" : "Negative";
+  const tone = toneOf(item);
+  const toneColor = tone === "fine" ? colors.positive : tone === "avoid" ? colors.negative : colors.subtext;
+  const toneBg = tone === "fine" ? "rgba(74,222,155,0.14)" : tone === "avoid" ? "rgba(251,113,133,0.14)" : colors.panel;
+  const label = item.rule ? (item.rule === "support" ? "Support" : "Avoid") : tone === "fine" ? "Fine" : tone === "avoid" ? "Avoid" : "Neutral";
   return (
     <Pressable
       onPress={() => openCountry(item.country)}
@@ -63,9 +88,9 @@ function HistoryRow({ item, last }: { item: ScanRecord; last: boolean }) {
         )}
       </View>
       <View style={styles.historyRight}>
-        <View style={[styles.tonePill, { backgroundColor: positive ? "rgba(74,222,155,0.14)" : "rgba(251,113,133,0.14)" }]}>
-          {item.rule ? <Ionicons name="person" size={10} color={positive ? colors.positive : colors.negative} /> : null}
-          <Text style={[styles.historyTone, { color: positive ? colors.positive : colors.negative }]}>{label}</Text>
+        <View style={[styles.tonePill, { backgroundColor: toneBg }]}>
+          {item.rule ? <Ionicons name="person" size={10} color={toneColor} /> : null}
+          <Text style={[styles.historyTone, { color: toneColor }]}>{label}</Text>
         </View>
         <Text style={styles.historyTime}>{timeOf(item.scannedAt)}</Text>
       </View>
@@ -87,7 +112,36 @@ export default function HistoryScreen() {
     setRefreshing(false);
   };
 
-  const positiveShare = stats.total > 0 ? Math.round((stats.positive / stats.total) * 100) : 0;
+  const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [tone, setTone] = useState<ToneFilter>("all");
+  const [period, setPeriod] = useState<PeriodFilter>("all");
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(query), 150);
+    return () => clearTimeout(t);
+  }, [query]);
+  const filter = useMemo(() => ({ query: debouncedQuery, tone, period }), [debouncedQuery, tone, period]);
+  const filtering = isFiltered(filter);
+  const filtered = useMemo(() => filterScans(scans, filter), [scans, filter]);
+  const clearFilters = () => {
+    setQuery("");
+    setDebouncedQuery("");
+    setTone(NO_FILTER.tone);
+    setPeriod(NO_FILTER.period);
+  };
+
+  // The summary describes whatever is listed (the filtered set when filtering).
+  const counts = useMemo(() => {
+    let fine = 0;
+    let avoid = 0;
+    for (const s of filtered) {
+      const t = toneOf(s);
+      if (t === "fine") fine += 1;
+      else if (t === "avoid") avoid += 1;
+    }
+    return { total: filtered.length, fine, avoid };
+  }, [filtered]);
+  const positiveShare = counts.fine + counts.avoid > 0 ? Math.round((counts.fine / (counts.fine + counts.avoid)) * 100) : 0;
 
   const topCountries = useMemo(() => {
     const counts = new Map<string, number>();
@@ -97,14 +151,14 @@ export default function HistoryScreen() {
 
   const groups = useMemo(() => {
     const out: { key: string; items: ScanRecord[] }[] = [];
-    for (const s of scans.slice(0, RECENT_LIMIT)) {
+    for (const s of filtered.slice(0, RECENT_LIMIT)) {
       const key = dayKey(s.scannedAt);
       const last = out[out.length - 1];
       if (last && last.key === key) last.items.push(s);
       else out.push({ key, items: [s] });
     }
     return out;
-  }, [scans]);
+  }, [filtered]);
 
   const summary = (
     <Card>
@@ -112,17 +166,17 @@ export default function HistoryScreen() {
         <Donut
           size={104}
           segments={[
-            { value: stats.positive, color: colors.positive },
-            { value: stats.negative, color: colors.negative },
+            { value: counts.fine, color: colors.positive },
+            { value: counts.avoid, color: colors.negative },
           ]}
-          label={stats.total ? `${positiveShare}%` : "–"}
+          label={counts.fine + counts.avoid ? `${positiveShare}%` : "–"}
           caption="positive"
         />
         <View style={styles.overviewStats}>
           {[
-            { label: "Scans", value: stats.total.toLocaleString(), color: colors.accent },
-            { label: "Positive", value: stats.positive.toLocaleString(), color: colors.positive },
-            { label: "Negative", value: stats.negative.toLocaleString(), color: colors.negative },
+            { label: filtering ? "Matching" : "Scans", value: counts.total.toLocaleString(), color: colors.accent },
+            { label: "Fine", value: counts.fine.toLocaleString(), color: colors.positive },
+            { label: "Avoid", value: counts.avoid.toLocaleString(), color: colors.negative },
             { label: "Streak", value: `${gamification.currentStreak}d`, color: colors.gold },
           ].map((row) => (
             <View key={row.label} style={styles.overviewRow}>
@@ -136,10 +190,47 @@ export default function HistoryScreen() {
     </Card>
   );
 
-  const list = (
+  const chip = (label: string, active: boolean, onPress: () => void) => (
+    <Pressable
+      key={label}
+      onPress={() => {
+        if (!active) {
+          hapticSelection();
+          onPress();
+        }
+      }}
+      style={[styles.chip, active && styles.chipActive]}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+    >
+      <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
+    </Pressable>
+  );
+
+  const controls = (
+    <View style={styles.controls}>
+      <SearchField value={query} onChangeText={setQuery} placeholder="Search country, product or barcode" />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+        {TONES.map((t) => chip(t.label, tone === t.key, () => setTone(t.key)))}
+        <View style={styles.chipGap} />
+        {PERIODS.map((p) => chip(p.label, period === p.key, () => setPeriod(p.key)))}
+      </ScrollView>
+    </View>
+  );
+
+  const list =
+    filtered.length === 0 ? (
+      <EmptyState
+        icon="search-outline"
+        title="No matching scans"
+        text="Try another search or fewer filters."
+        actionLabel="Clear filters"
+        onAction={clearFilters}
+      />
+    ) : (
     <Card padded={false}>
-      {scans.length > RECENT_LIMIT ? (
-        <Text style={styles.listCaption}>{`Latest ${RECENT_LIMIT} of ${scans.length.toLocaleString()}`}</Text>
+      {filtered.length > RECENT_LIMIT ? (
+        <Text style={styles.listCaption}>{`Latest ${RECENT_LIMIT} of ${filtered.length.toLocaleString()}`}</Text>
       ) : null}
       {groups.map((group) => (
         <View key={group.key}>
@@ -240,6 +331,7 @@ export default function HistoryScreen() {
         <View style={styles.split}>
           <View style={styles.splitCol}>
             {summary}
+            {controls}
             {more}
           </View>
           <View style={styles.splitCol}>{list}</View>
@@ -247,6 +339,7 @@ export default function HistoryScreen() {
       ) : (
         <>
           {summary}
+          {controls}
           {list}
           {more}
         </>
@@ -301,6 +394,40 @@ const styles = StyleSheet.create({
   cardHead: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
+  },
+  controls: {
+    gap: spacing.sm,
+  },
+  chips: {
+    gap: spacing.sm,
+    alignItems: "center",
+  },
+  chipGap: {
+    width: 1,
+    height: 20,
+    backgroundColor: colors.border,
+    marginHorizontal: spacing.xs,
+  },
+  chip: {
+    minHeight: 36,
+    justifyContent: "center",
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderStrong,
+  },
+  chipActive: {
+    backgroundColor: colors.text,
+    borderColor: colors.text,
+  },
+  chipText: {
+    ...typography.caption,
+    color: colors.subtext,
+    fontWeight: "700",
+  },
+  chipTextActive: {
+    color: colors.bg,
   },
   listCaption: {
     ...typography.caption,

@@ -49,8 +49,20 @@ async function commit(next: Basket) {
   }
 }
 
+let loading: Promise<Basket> | null = null;
+
+/** Resolves once the saved basket has been loaded (loads it if nobody has yet). */
+export function ensureBasketLoaded(): Promise<Basket> {
+  return loading ?? loadBasket();
+}
+
 /** Loads the saved basket, discarding it if it went 12 hours without an addition. */
-export async function loadBasket(now = Date.now()): Promise<Basket> {
+export function loadBasket(now = Date.now()): Promise<Basket> {
+  loading = readSavedBasket(now);
+  return loading;
+}
+
+async function readSavedBasket(now: number): Promise<Basket> {
   let saved: Basket | null = null;
   try {
     const raw = await AsyncStorage.getItem(KEY);

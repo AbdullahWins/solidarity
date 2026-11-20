@@ -1,9 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useCameraPermissions, type BarcodeScanningResult } from "expo-camera";
-import * as Haptics from "expo-haptics";
 import { router, useIsFocused } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, Linking, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { AccessibilityInfo, Alert, Linking, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeIn, FadeInDown, FadeInUp, FadeOutUp, LinearTransition } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -18,10 +17,10 @@ import { useLayout } from "../../hooks/useLayout";
 import { useScanHistory } from "../../hooks/useScanHistory";
 import { badgeDefinitions } from "../../lib/badges";
 import { getBasket, recordBasketScan, removeFromBasket, setBasketActive, updateBasketItem } from "../../lib/basket";
-import { resolveAnswer } from "../../lib/countryRules";
+import { resolveAnswer, type Answer } from "../../lib/countryRules";
 import { parseBarcode } from "../../lib/gtin";
 import { isDemo } from "../../lib/demo";
-import { hapticImpact, hapticNotification, hapticSelection } from "../../lib/haptics";
+import { hapticBasketAdd, hapticSelection, hapticVerdict } from "../../lib/haptics";
 import { getCachedPreferences } from "../../lib/preferences";
 import { lookupProduct } from "../../lib/productLookup";
 import { countryForPrefix } from "../../lib/scan-logic";
@@ -38,6 +37,7 @@ import { Flag } from "../ui/Flag";
 import { Screen } from "../ui/Screen";
 import { TextField } from "../ui/TextField";
 import { VoteButtons } from "../voting/VoteButtons";
+import { BarcodeInfoSheet } from "./BarcodeInfoSheet";
 import { BasketBar, type BasketNotice } from "./BasketBar";
 import { ProductRow } from "./ProductRow";
 import { Viewfinder } from "./Viewfinder";
@@ -51,6 +51,17 @@ const KIND_LABEL: Record<string, string> = {
 };
 
 const BASKET_COOLDOWN_MS = 1200;
+
+/** Screen-reader text for a result: country, then the primary verdict. */
+function spokenVerdict(country: string, answer: Answer, communityPositive: boolean): string {
+  if (answer.source === "rule") return `${country}. You ${answer.rule} this country.`;
+  if (answer.source === "none") return `${country}. No verdict for this range.`;
+  return `${country}. ${communityPositive ? "Looks fine." : "Community says avoid."}`;
+}
+
+function announce(text: string) {
+  AccessibilityInfo.announceForAccessibility(text);
+}
 const BASKET_UNDO_MS = 5000;
 
 export function ScanScreen() {
@@ -77,6 +88,7 @@ export function ScanScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
   // Camera callbacks fire many times per second; state updates are async, so
   // a ref is the only reliable guard against recording one barcode twice.
   const lockRef = useRef(false);
@@ -134,6 +146,7 @@ export function ScanScreen() {
             if (!last || last.code !== parsed.code || Date.now() - last.at > 4000) {
               setBasketNotice({ kind: "duplicate", country });
               hapticSelection();
+              announce("Already in basket");
             }
             lastDuplicateRef.current = { code: parsed.code, at: Date.now() };
           } else {
@@ -141,7 +154,8 @@ export function ScanScreen() {
             setBasketNotice({ kind: "added", item: { code: parsed.code, country, tone: answer.tone } });
             setToast({ xp: result.gamification.xp, badgeIds: result.newlyUnlockedBadgeIds });
             if (result.leveledUp) setLevelUp(result.gamification.level);
-            hapticImpact(answer.tone === "negative" ? Haptics.ImpactFeedbackStyle.Heavy : Haptics.ImpactFeedbackStyle.Light);
+            hapticBasketAdd(answer.tone);
+            announce(`Added. ${spokenVerdict(country, answer, positive)}`);
             if (getCachedPreferences().productLookup === "on" && isVotableCountry(country) && !isDemo()) {
               void lookupProduct(parsed.code).then((found) => {
                 if (found.status !== "found") return;
@@ -170,11 +184,8 @@ export function ScanScreen() {
         setManualOpen(false);
         setToast({ xp: result.gamification.xp, badgeIds: result.newlyUnlockedBadgeIds });
         if (result.leveledUp) setLevelUp(result.gamification.level);
-        hapticNotification(
-          answer.tone === "negative"
-            ? Haptics.NotificationFeedbackType.Warning
-            : Haptics.NotificationFeedbackType.Success
-        );
+        hapticVerdict(answer.tone);
+        announce(spokenVerdict(country, answer, positive));
         return true;
       } catch {
         lockRef.current = false;
@@ -375,6 +386,15 @@ export function ScanScreen() {
                 <Text style={styles.resultCountry} numberOfLines={2}>
                   {record.country}
                 </Text>
+                <Pressable
+                  onPress={() => setInfoOpen(true)}
+                  style={styles.infoButton}
+                  accessibilityRole="button"
+                  accessibilityLabel="What this barcode tells you"
+                  hitSlop={6}
+                >
+                  <Ionicons name="information-circle-outline" size={22} color={colors.subtext} />
+                </Pressable>
               </View>
               {isVotableCountry(record.country) ? (
                 <ProductRow
@@ -501,6 +521,7 @@ export function ScanScreen() {
         </Animated.View>
       )}
 
+      <BarcodeInfoSheet visible={infoOpen} onClose={() => setInfoOpen(false)} />
       <LevelUpModal visible={levelUp !== null} level={levelUp ?? 1} onDismiss={() => setLevelUp(null)} />
     </>
   );
@@ -619,6 +640,13 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
 
+  infoButton: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: -spacing.sm,
+  },
   resultCountry: {
     ...typography.title,
     color: colors.text,

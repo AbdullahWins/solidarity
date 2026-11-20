@@ -50,6 +50,11 @@ export async function updateScan(
   return next;
 }
 
+/** Replaces the whole scan list (backup import). */
+export async function replaceScans(scans: ScanRecord[]): Promise<void> {
+  await AsyncStorage.setItem(KEYS.scans, JSON.stringify(scans.slice(0, MAX_STORED_SCANS)));
+}
+
 export async function clearScans(): Promise<void> {
   await AsyncStorage.removeItem(KEYS.scans);
 }

@@ -9,6 +9,7 @@ import { AppState, StyleSheet, Text, View } from "react-native";
 import "react-native-reanimated";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import { QuickActionHandler } from "@/components/navigation/QuickActionHandler";
 import { Button } from "@/components/ui/Button";
 import { colors, spacing, typography } from "@/constants/theme";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -115,9 +116,11 @@ export default function RootLayout() {
             <Stack.Screen name="profile" options={{ title: "Profile", headerBackTitle: "Back", animation: "slide_from_right" }} />
             <Stack.Screen name="settings" options={{ title: "Settings", headerBackTitle: "Back", animation: "slide_from_right" }} />
             <Stack.Screen name="rules" options={{ title: "My country rules", headerBackTitle: "Back", animation: "slide_from_right" }} />
+            <Stack.Screen name="backup-preview" options={{ title: "Import data", headerBackTitle: "Back", presentation: "modal" }} />
             <Stack.Screen name="basket" options={{ title: "Basket", headerBackTitle: "Back", presentation: "modal" }} />
             <Stack.Screen name="+not-found" options={{ title: "Not found" }} />
           </Stack>
+          <QuickActionHandler skipInitial={!!needsIntro} />
           <StatusBar style="light" />
         </ThemeProvider>
       </AuthProvider>

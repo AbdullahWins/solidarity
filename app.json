@@ -156,7 +156,8 @@
       "expo-web-browser",
       "./plugins/withAndroidStoreCompliance.js",
       "./plugins/withCleanPermissions.js",
-      "./plugins/withReleaseSigning.js"
+      "./plugins/withReleaseSigning.js",
+      "expo-quick-actions"
     ],
     "experiments": {
       "typedRoutes": true

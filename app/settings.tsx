@@ -11,6 +11,8 @@ import { APP_NAME, APP_SHARE_URL, LINKS } from "../constants/app-info";
 import { colors, spacing, typography } from "../constants/theme";
 import { useCountryRules } from "../hooks/useCountryRules";
 import { useLayout } from "../hooks/useLayout";
+import { BackupError } from "../lib/backup";
+import { exportBackup, pickBackup, setPendingImport } from "../lib/backupIO";
 import { usePreferences } from "../hooks/usePreferences";
 import { useScanHistory } from "../hooks/useScanHistory";
 import { openInAppBrowser, openStoreReview } from "../lib/links";
@@ -109,6 +111,25 @@ export default function SettingsScreen() {
     </Group>
   );
 
+  const onExport = async () => {
+    try {
+      await exportBackup();
+    } catch (err) {
+      Alert.alert("Export failed", err instanceof BackupError ? err.message : "Please try again.");
+    }
+  };
+
+  const onImport = async () => {
+    try {
+      const backup = await pickBackup();
+      if (!backup) return;
+      setPendingImport(backup);
+      router.push("/backup-preview");
+    } catch (err) {
+      Alert.alert("Can't import", err instanceof BackupError ? err.message : "This file couldn't be read.");
+    }
+  };
+
   const dataGroup = (
     <Group title="Your data">
       <ListRow
@@ -116,6 +137,18 @@ export default function SettingsScreen() {
         label="My country rules"
         subtitle={`${ruleCount} rule${ruleCount === 1 ? "" : "s"} · Avoid or Support, on this device only`}
         onPress={() => router.push("/rules")}
+      />
+      <ListRow
+        icon="share-outline"
+        label="Export my data"
+        subtitle="Scans, progress and rules as a file. Includes your scan history"
+        onPress={onExport}
+      />
+      <ListRow
+        icon="download-outline"
+        label="Import data"
+        subtitle="Add a Solidarity backup file to this device"
+        onPress={onImport}
       />
       <ListRow
         icon="trash-outline"
