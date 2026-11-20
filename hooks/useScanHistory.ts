@@ -1,7 +1,9 @@
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 
 import { computeGamificationState, computeScanStats } from "../lib/gamification";
+import { scheduleStreakReminders } from "../lib/notifications";
+import { getCachedPreferences } from "../lib/preferences";
 import {
   addScan as persistScan,
   clearScans,
@@ -81,6 +83,11 @@ export function useScanHistory() {
         (id) => !previousGamification.unlockedBadgeIds.includes(id)
       );
       const leveledUp = nextGamification.level > previousGamification.level;
+
+      // A scan today removes today's streak reminder.
+      if (getCachedPreferences().streakReminderEnabled) {
+        void scheduleStreakReminders(nextGamification.lastScanLocalDate).catch(() => {});
+      }
 
       return { record, gamification: nextGamification, newlyUnlockedBadgeIds, leveledUp };
     },
