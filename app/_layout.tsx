@@ -1,10 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFonts } from "expo-font";
-import { DarkTheme, Stack, ThemeProvider, type ErrorBoundaryProps } from "expo-router";
+import { DarkTheme, router, Stack, ThemeProvider, type ErrorBoundaryProps } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import * as SystemUI from "expo-system-ui";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { AppState, StyleSheet, Text, View } from "react-native";
 import "react-native-reanimated";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/Button";
 import { colors, spacing, typography } from "@/constants/theme";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { scheduleStreakReminders } from "@/lib/notifications";
+import { shouldShowOnboarding } from "@/lib/onboarding";
 import { getPreferences } from "@/lib/preferences";
 import { getGamificationState } from "@/lib/storage";
 import { loadMyVotes } from "@/lib/votes";
@@ -55,22 +56,32 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
 
 export default function RootLayout() {
   const [loaded, fontError] = useFonts(Ionicons.font);
+  const [needsIntro, setNeedsIntro] = useState<boolean | null>(null);
 
   useEffect(() => {
     void SystemUI.setBackgroundColorAsync(colors.bg).catch(() => {});
     void loadMyVotes();
     void refreshReminders();
+    void shouldShowOnboarding().then(setNeedsIntro);
     const sub = AppState.addEventListener("change", (s) => {
       if (s === "active") void refreshReminders();
     });
     return () => sub.remove();
   }, []);
 
-  const ready = loaded || !!fontError;
+  const ready = (loaded || !!fontError) && needsIntro !== null;
 
   useEffect(() => {
-    if (ready) void SplashScreen.hideAsync().catch(() => {});
-  }, [ready]);
+    if (!ready) return;
+    // Present the intro over the tabs, then lift the splash once it's up.
+    // Deferred a tick: the Stack must be mounted before navigating.
+    const nav = needsIntro ? setTimeout(() => router.push("/onboarding"), 0) : undefined;
+    const t = setTimeout(() => void SplashScreen.hideAsync().catch(() => {}), needsIntro ? 150 : 0);
+    return () => {
+      clearTimeout(t);
+      if (nav) clearTimeout(nav);
+    };
+  }, [ready, needsIntro]);
 
   if (!ready) return null;
 
@@ -92,6 +103,11 @@ export default function RootLayout() {
               name="auth"
               options={{ presentation: "modal", title: "Account", headerShown: false }}
             />
+            <Stack.Screen
+              name="onboarding"
+              options={{ presentation: "fullScreenModal", animation: "fade", headerShown: false, gestureEnabled: false }}
+            />
+            <Stack.Screen name="country/[name]" options={{ headerShown: false, animation: "slide_from_right" }} />
             <Stack.Screen name="+not-found" options={{ title: "Not found" }} />
           </Stack>
           <StatusBar style="light" />
