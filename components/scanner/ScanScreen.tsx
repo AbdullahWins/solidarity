@@ -264,7 +264,7 @@ export function ScanScreen() {
                 {"Shows where the barcode was registered, which isn't always where the product was made."}
               </Text>
               <View style={styles.resultActions}>
-                <Button label="Scan another" icon="scan" variant="secondary" onPress={scanAgain} style={styles.flex} />
+                <Button label="Scan again" icon="scan" variant="secondary" onPress={scanAgain} style={styles.flex} />
                 <Button
                   label="Details"
                   icon="chevron-forward"
