@@ -15,6 +15,7 @@ import {
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 import { deleteCloudProfile, MAX_DISPLAY_NAME, resetSync } from "../lib/cloudSync";
+import { DEMO_USER, isDemo } from "../lib/demo";
 import { auth, isFirebaseConfigured } from "../lib/firebase";
 import { clearMyVotes, deleteAllVotesForUser } from "../lib/votes";
 
@@ -66,6 +67,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [emailVerifiedOverride, setEmailVerifiedOverride] = useState<boolean | null>(null);
 
   useEffect(() => {
+    if (isDemo()) {
+      // Web-only screenshot mode (lib/demo.ts): show signed-in screens.
+      setUser(DEMO_USER as unknown as User);
+      setLoading(false);
+      return;
+    }
     if (!isFirebaseConfigured || !auth) {
       setLoading(false);
       return;

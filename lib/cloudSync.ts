@@ -12,6 +12,7 @@ import {
   type Timestamp,
 } from "firebase/firestore";
 
+import { DEMO_LEADERBOARD, isDemo } from "./demo";
 import { db, isFirebaseConfigured } from "./firebase";
 import { buildDailyCounts, computeScanStats } from "./gamification";
 import type { GamificationState, ScanRecord } from "./types";
@@ -144,6 +145,7 @@ export async function pullSummary(uid: string): Promise<CloudUserSummary | null>
 }
 
 export async function fetchLeaderboard(topN = 100): Promise<LeaderboardEntry[]> {
+  if (isDemo()) return DEMO_LEADERBOARD.slice(0, topN);
   if (!isFirebaseConfigured || !db) return [];
   try {
     const snap = await getDocs(query(collection(db, "leaderboard"), orderBy("xp", "desc"), limit(topN)));

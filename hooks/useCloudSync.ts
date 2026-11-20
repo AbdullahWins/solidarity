@@ -11,6 +11,7 @@ import {
   type CloudUserSummary,
 } from "../lib/cloudSync";
 import type { GamificationState, ScanRecord } from "../lib/types";
+import { isDemo } from "../lib/demo";
 import { mergeMyVotesFromCloud } from "../lib/votes";
 
 // One shared store for every screen that uses this hook. Previously each
@@ -42,6 +43,10 @@ let pullInFlight: Promise<void> | null = null;
 async function pull(uid: string) {
   if (pullInFlight) return pullInFlight;
   pullInFlight = (async () => {
+    if (isDemo()) {
+      setState({ pulled: true, cloudSummary: null, leaderboardOptIn: true });
+      return;
+    }
     const cloud = await pullSummary(uid);
     if (state.uid !== uid) return; // signed out / switched while loading
     if (cloud) void mergeMyVotesFromCloud(cloud.myVotes);
@@ -73,7 +78,7 @@ export function useCloudSync(scans: ScanRecord[], gamification: GamificationStat
   // Debounced push whenever local progress changes, but never before the
   // cloud copy has been read (otherwise it would overwrite the opt-in flag).
   useEffect(() => {
-    if (!user || !isFirebaseConfigured || !sync.pulled || sync.uid !== user.uid) return;
+    if (!user || !isFirebaseConfigured || !sync.pulled || sync.uid !== user.uid || isDemo()) return;
     if (scans.length === 0 && gamification.voteCount === 0) return;
     const optIn = sync.leaderboardOptIn && emailVerified;
     markDirty(async () => {
