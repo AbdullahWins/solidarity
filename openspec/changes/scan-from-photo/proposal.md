@@ -18,6 +18,7 @@ The scanner only works on products physically in front of the camera. A lot of s
 
 ### Modified Capabilities
 - `barcode-scanning`: adds scanning a barcode from an image, alongside the camera and typed entry.
+- `adaptive-ui`: the Scan tab's controls under the camera become one row of three equal buttons (Basket, Photo, Type code).
 
 ## Impact
 

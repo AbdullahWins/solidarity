@@ -79,3 +79,9 @@ test("unknown scan fields are dropped", () => {
   const backup = parseBackup(JSON.stringify(extra));
   expect(Object.keys(backup.scans[0])).not.toContain("injected");
 });
+
+test("scans read from a photo are accepted", () => {
+  const withPhoto = JSON.parse(file());
+  withPhoto.scans.push(scan("p", 4, { source: "photo" }));
+  expect(parseBackup(JSON.stringify(withPhoto)).scans.map((s) => s.source)).toContain("photo");
+});

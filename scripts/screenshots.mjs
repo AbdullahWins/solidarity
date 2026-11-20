@@ -155,7 +155,7 @@ const SCREENS = [
     label: "Scan result",
     path: "/",
     act: async (page) => {
-      await page.getByText("Type a code instead", { exact: true }).click();
+      await page.getByText("Type code", { exact: true }).click();
       await page.getByPlaceholder("e.g. 4006381333931").fill(ean("560", "123456789"));
       await page.getByText("Look up", { exact: true }).click();
     },
@@ -165,7 +165,7 @@ const SCREENS = [
     label: "Scan result details",
     path: "/",
     act: async (page) => {
-      await page.getByText("Type a code instead", { exact: true }).click();
+      await page.getByText("Type code", { exact: true }).click();
       await page.getByPlaceholder("e.g. 4006381333931").fill(ean("400", "638133393"));
       await page.getByText("Look up", { exact: true }).click();
       await page.waitForTimeout(800);
@@ -177,8 +177,8 @@ const SCREENS = [
     label: "Basket mode",
     path: "/",
     act: async (page) => {
-      await page.getByText("Basket", { exact: true }).click();
-      await page.getByText("Type a code instead", { exact: true }).click();
+      await page.getByLabel("Basket mode").click();
+      await page.getByText("Type code", { exact: true }).click();
       await page.getByPlaceholder("e.g. 4006381333931").fill(ean("800", "100104729"));
       await page.getByText("Look up", { exact: true }).click();
     },
@@ -189,7 +189,7 @@ const SCREENS = [
     label: "What this barcode tells you",
     path: "/",
     act: async (page) => {
-      await page.getByText("Type a code instead", { exact: true }).click();
+      await page.getByText("Type code", { exact: true }).click();
       await page.getByPlaceholder("e.g. 4006381333931").fill(ean("560", "123456789"));
       await page.getByText("Look up", { exact: true }).click();
       await page.waitForTimeout(800);

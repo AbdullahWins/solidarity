@@ -150,7 +150,7 @@ export default function CountryScreen() {
       ) : (
         myScans.slice(0, 25).map((s, i, arr) => (
           <View key={s.id} style={[styles.scanRow, i < arr.length - 1 && styles.divider]}>
-            <Ionicons name={s.source === "camera" ? "camera-outline" : "keypad-outline"} size={16} color={colors.muted} />
+            <Ionicons name={s.source === "camera" ? "camera-outline" : s.source === "photo" ? "image-outline" : "keypad-outline"} size={16} color={colors.muted} />
             <Text style={styles.scanCode}>{s.code}</Text>
             <Text style={styles.scanDate}>{formatWhen(s.scannedAt)}</Text>
           </View>

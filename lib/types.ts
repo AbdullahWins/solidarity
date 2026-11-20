@@ -1,9 +1,12 @@
+/** How a barcode was captured: live camera, typed, or read from an image. */
+export type ScanSource = "camera" | "manual" | "photo";
+
 export type ScanRecord = {
   id: string;
   code: string;
   country: string;
   isPositive: boolean;
-  source: "camera" | "manual";
+  source: ScanSource;
   scannedAt: string; // ISO 8601, UTC
   /** The user's personal rule for this country at scan time, if any. */
   rule?: "avoid" | "support";

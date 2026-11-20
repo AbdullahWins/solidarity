@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useCameraPermissions, type BarcodeScanningResult } from "expo-camera";
+import * as DocumentPicker from "expo-document-picker";
 import { router, useIsFocused } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, Alert, Linking, Platform, Pressable, StyleSheet, Text, View } from "react-native";
@@ -22,9 +23,10 @@ import { parseBarcode } from "../../lib/gtin";
 import { isDemo } from "../../lib/demo";
 import { hapticBasketAdd, hapticSelection, hapticVerdict } from "../../lib/haptics";
 import { getCachedPreferences } from "../../lib/preferences";
+import { planPhoto, scanImage, type FoundCode } from "../../lib/photoScan";
 import { lookupProduct } from "../../lib/productLookup";
 import { countryForPrefix } from "../../lib/scan-logic";
-import type { ScanRecord } from "../../lib/types";
+import type { ScanRecord, ScanSource } from "../../lib/types";
 import { openCountry } from "../../lib/navigation";
 import { isVotableCountry, type VoteChoice } from "../../lib/votes";
 import { AccountButton } from "../navigation/AccountButton";
@@ -63,6 +65,36 @@ function announce(text: string) {
   AccessibilityInfo.announceForAccessibility(text);
 }
 const BASKET_UNDO_MS = 5000;
+
+type PillProps = {
+  label: string;
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  active?: boolean;
+  onPress: () => void;
+  a11yLabel: string;
+  a11yHint?: string;
+  role?: "button" | "switch";
+  disabled?: boolean;
+};
+
+function Pill(opts: PillProps) {
+  return (
+    <Pressable
+      onPress={opts.onPress}
+      disabled={opts.disabled}
+      style={({ pressed }) => [styles.pill, opts.active && styles.pillOn, pressed && { opacity: 0.8 }]}
+      accessibilityRole={opts.role ?? "button"}
+      accessibilityState={opts.role === "switch" ? { checked: !!opts.active } : { expanded: opts.active }}
+      accessibilityLabel={opts.a11yLabel}
+      accessibilityHint={opts.a11yHint}
+    >
+      <Ionicons name={opts.icon} size={16} color={opts.active ? colors.bg : colors.text} />
+      <Text style={[styles.pillText, opts.active && { color: colors.bg }]} numberOfLines={1}>
+        {opts.label}
+      </Text>
+    </Pressable>
+  );
+}
 
 export function ScanScreen() {
   const isFocused = useIsFocused();
@@ -122,7 +154,7 @@ export function ScanScreen() {
   };
 
   const submit = useCallback(
-    async (rawCode: string, source: "camera" | "manual", hint?: string): Promise<boolean> => {
+    async (rawCode: string, source: ScanSource, hint?: string): Promise<boolean> => {
       const parsed = parseBarcode(rawCode, hint);
       if (!parsed.ok) {
         if (source === "manual") setManualError(parsed.message);
@@ -210,6 +242,47 @@ export function ScanScreen() {
     setManualError(null);
     lockRef.current = false;
     if (await submit(manualCode, "manual")) setManualCode("");
+  };
+
+  const [photoChoices, setPhotoChoices] = useState<FoundCode[] | null>(null);
+  const [readingPhoto, setReadingPhoto] = useState(false);
+
+  const submitPhotoCode = async (found: FoundCode) => {
+    lockRef.current = false;
+    return submit(found.raw, "photo", found.type);
+  };
+
+  const onPhoto = async () => {
+    setPhotoChoices(null);
+    let uri: string | undefined;
+    try {
+      const picked = await DocumentPicker.getDocumentAsync({ type: "image/*", copyToCacheDirectory: true, multiple: false });
+      if (picked.canceled) return;
+      uri = picked.assets?.[0]?.uri;
+    } catch {
+      uri = undefined;
+    }
+    if (!uri) return;
+    setReadingPhoto(true);
+    const codes = await scanImage(uri);
+    setReadingPhoto(false);
+    const plan = planPhoto(codes, getBasket().active);
+    if (plan.kind === "none") {
+      Alert.alert(
+        "No barcode found",
+        "Try a sharper photo, or zoom in on the barcode before taking the screenshot.",
+        [
+          { text: "Type it instead", onPress: () => setManualOpen(true) },
+          { text: "OK", style: "cancel" },
+        ]
+      );
+    } else if (plan.kind === "one") {
+      await submitPhotoCode(plan.code);
+    } else if (plan.kind === "choose") {
+      setPhotoChoices(plan.codes);
+    } else {
+      for (const code of plan.codes) await submitPhotoCode(code);
+    }
   };
 
   const toggleBasket = () => {
@@ -306,31 +379,67 @@ export function ScanScreen() {
   ) : null;
 
   // Under the camera: switch basket mode, or type a code.
+  // Under the camera: basket mode, read from a photo, or type a code.
   const controls = (
     <View style={styles.controls}>
-      <Pressable
+      <Pill
+        label={basketOn ? "Basket on" : "Basket"}
+        icon={basketOn ? "basket" : "basket-outline"}
+        active={basketOn}
         onPress={toggleBasket}
-        style={({ pressed }) => [styles.basketToggle, basketOn && styles.basketToggleOn, pressed && { opacity: 0.8 }]}
-        accessibilityRole="switch"
-        accessibilityState={{ checked: basketOn }}
-        accessibilityLabel="Basket mode"
-        accessibilityHint="Keeps scanning and builds a list of everything you scan"
-      >
-        <Ionicons name={basketOn ? "basket" : "basket-outline"} size={16} color={basketOn ? colors.bg : colors.text} />
-        <Text style={[styles.basketToggleText, basketOn && { color: colors.bg }]}>{basketOn ? "Basket on" : "Basket"}</Text>
-      </Pressable>
-      {manualOpen || (latest && !basketOn) ? null : (
-        <Pressable
-          onPress={() => setManualOpen(true)}
-          style={({ pressed }) => [styles.manualLink, pressed && { opacity: 0.7 }]}
-          accessibilityRole="button"
-        >
-          <Ionicons name="keypad-outline" size={16} color={colors.accent} />
-          <Text style={styles.manualLinkText}>Type a code instead</Text>
-        </Pressable>
-      )}
+        role="switch"
+        a11yLabel="Basket mode"
+        a11yHint="Keeps scanning and builds a list of everything you scan"
+      />
+      <Pill
+        label={readingPhoto ? "Reading…" : "Photo"}
+        icon="image-outline"
+        onPress={onPhoto}
+        disabled={readingPhoto}
+        a11yLabel="Scan from photo"
+        a11yHint="Reads a barcode from a screenshot or photo"
+      />
+      <Pill
+        label="Type code"
+        icon="keypad-outline"
+        active={manualOpen}
+        onPress={() => setManualOpen((v) => !v)}
+        a11yLabel="Type a barcode"
+      />
     </View>
   );
+
+  const photoPicker = photoChoices ? (
+    <Card>
+      <Text style={styles.cardTitle}>Which barcode?</Text>
+      <Text style={styles.cardCaption}>This photo has {photoChoices.length} barcodes.</Text>
+      <View style={styles.choiceList}>
+        {photoChoices.map((c) => {
+          const parsed = parseBarcode(c.raw, c.type);
+          const country = (parsed.ok && countryForPrefix(parsed.prefix)) || "Unknown";
+          return (
+            <Pressable
+              key={c.code}
+              onPress={() => {
+                setPhotoChoices(null);
+                void submitPhotoCode(c);
+              }}
+              style={({ pressed }) => [styles.choice, pressed && { opacity: 0.7 }]}
+              accessibilityRole="button"
+              accessibilityLabel={`Check ${country}, ${c.code}`}
+            >
+              <Flag country={country} size={20} />
+              <Text style={styles.choiceCountry} numberOfLines={1}>
+                {country}
+              </Text>
+              <Text style={styles.code}>{c.code}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <Button label="Cancel" variant="secondary" onPress={() => setPhotoChoices(null)} />
+    </Card>
+  ) : null;
 
   const basketBar = basketOn ? (
     <BasketBar
@@ -443,7 +552,7 @@ export function ScanScreen() {
                   <View style={styles.metaRow}>
                     <Text style={styles.code}>{record.code}</Text>
                     <Text style={styles.meta}>
-                      {KIND_LABEL[kind] ?? kind} · {record.source === "camera" ? "Camera" : "Typed"}
+                      {KIND_LABEL[kind] ?? kind} · {record.source === "camera" ? "Camera" : record.source === "photo" ? "Photo" : "Typed"}
                     </Text>
                   </View>
                   <Text style={styles.disclaimer}>
@@ -483,6 +592,7 @@ export function ScanScreen() {
             <View style={styles.paneLeft}>{camera}</View>
             <View style={styles.paneRight}>
               {controls}
+              {photoPicker}
               {basketOn ? basketBar : result}
               {manual}
             </View>
@@ -491,6 +601,7 @@ export function ScanScreen() {
           <>
             {camera}
             {controls}
+            {photoPicker}
             {basketOn ? basketBar : result}
             {manual}
           </>
@@ -688,43 +799,52 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
   },
-  controls: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    flexWrap: "wrap",
+  choiceList: {
     gap: spacing.sm,
+    marginBottom: spacing.md,
   },
-  basketToggle: {
+  choice: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.xs,
-    minHeight: 40,
+    gap: spacing.md,
+    minHeight: 48,
     paddingHorizontal: spacing.md,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderStrong,
+    borderRadius: radius.lg,
+    backgroundColor: colors.panel,
   },
-  basketToggleOn: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
-  },
-  basketToggleText: {
+  choiceCountry: {
     ...typography.bodyStrong,
     color: colors.text,
+    flex: 1,
   },
-  manualLink: {
+  controls: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  pill: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: spacing.xs,
     minHeight: 44,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderStrong,
   },
-  manualLinkText: {
+  pillOn: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  pillText: {
     ...typography.bodyStrong,
-    color: colors.accent,
+    color: colors.text,
+    flexShrink: 1,
   },
+
+
 
 
 

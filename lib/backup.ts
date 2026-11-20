@@ -66,7 +66,7 @@ function validScan(v: unknown): v is ScanRecord {
     isString(s.country) &&
     s.country.length <= 64 &&
     typeof s.isPositive === "boolean" &&
-    (s.source === "camera" || s.source === "manual") &&
+    (s.source === "camera" || s.source === "manual" || s.source === "photo") &&
     isString(s.scannedAt) &&
     !Number.isNaN(Date.parse(s.scannedAt)) &&
     (s.rule === undefined || s.rule === "avoid" || s.rule === "support") &&

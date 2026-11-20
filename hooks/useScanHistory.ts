@@ -13,7 +13,7 @@ import {
   saveGamificationState,
   updateScan as persistScanUpdate,
 } from "../lib/storage";
-import { DEFAULT_GAMIFICATION_STATE, type GamificationState, type ScanRecord } from "../lib/types";
+import { DEFAULT_GAMIFICATION_STATE, type GamificationState, type ScanRecord, type ScanSource } from "../lib/types";
 
 export function useScanHistory() {
   const [scans, setScans] = useState<ScanRecord[]>([]);
@@ -61,7 +61,7 @@ export function useScanHistory() {
       code: string;
       country: string;
       isPositive: boolean;
-      source: "camera" | "manual";
+      source: ScanSource;
       rule?: "avoid" | "support";
     }) => {
       const record: ScanRecord = {
