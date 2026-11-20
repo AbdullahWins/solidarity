@@ -1,232 +1,273 @@
-import { Ionicons } from "@expo/vector-icons";
 import Constants from "expo-constants";
-import { Stack } from "expo-router";
-import { StatusBar } from "expo-status-bar";
+import { Image } from "expo-image";
 import React, { useState } from "react";
-import { Alert, Image, ScrollView, Share, StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
-import * as WebBrowser from "expo-web-browser";
+import { Alert, Platform, Share, StyleSheet, Text, View } from "react-native";
 
 import { Card } from "../../components/ui/Card";
-import { ScreenContainer } from "../../components/ui/ScreenContainer";
-import { SectionHeader } from "../../components/ui/SectionHeader";
-import { APP_NAME, APP_SHARE_URL } from "../../constants/app-info";
-import { colors, radius, spacing, typography } from "../../constants/theme";
+import { ListRow } from "../../components/ui/ListRow";
+import { Screen } from "../../components/ui/Screen";
+import { APP_NAME, APP_SHARE_URL, LINKS } from "../../constants/app-info";
+import { colors, spacing, typography } from "../../constants/theme";
+import { useLayout } from "../../hooks/useLayout";
 import { usePreferences } from "../../hooks/usePreferences";
 import { useScanHistory } from "../../hooks/useScanHistory";
-import {
-  cancelStreakReminder,
-  requestNotificationPermission,
-  scheduleStreakReminder,
-} from "../../lib/notifications";
+import { openInAppBrowser, openStoreReview } from "../../lib/links";
+import { cancelStreakReminders, requestNotificationPermission, scheduleStreakReminders } from "../../lib/notifications";
+
+const logo = require("../../assets/images/logo.png");
+
+function Group({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <View style={styles.group}>
+      <Text style={styles.groupTitle} accessibilityRole="header">
+        {title}
+      </Text>
+      <Card padded={false}>{children}</Card>
+    </View>
+  );
+}
 
 export default function SettingsScreen() {
   const { preferences, update } = usePreferences();
-  const { clearHistory } = useScanHistory();
+  const { gamification, clearHistory, scans } = useScanHistory();
+  const { columns } = useLayout();
   const [togglingReminder, setTogglingReminder] = useState(false);
 
-  const openStoreLink = () => {
-    WebBrowser.openBrowserAsync(APP_SHARE_URL).catch(() => {});
-  };
+  const version = Constants.expoConfig?.version ?? "1.0.0";
+  const build =
+    Platform.OS === "ios" ? Constants.expoConfig?.ios?.buildNumber : Constants.expoConfig?.android?.versionCode?.toString();
 
   const shareApp = () => {
-    Share.share({
-      message: `Check out ${APP_NAME} — know what you buy: ${APP_SHARE_URL}`,
-    }).catch(() => {});
-  };
-
-  const toggleStreakReminder = async (value: boolean) => {
-    setTogglingReminder(true);
-    if (value) {
-      const granted = await requestNotificationPermission();
-      if (!granted) {
-        Alert.alert(
-          "Notifications disabled",
-          "Enable notifications for Solidarity in your device settings to get streak reminders."
-        );
-        setTogglingReminder(false);
-        return;
-      }
-      await scheduleStreakReminder();
-    } else {
-      await cancelStreakReminder();
-    }
-    await update({ streakReminderEnabled: value });
-    setTogglingReminder(false);
-  };
-
-  const handleClearHistory = () => {
-    Alert.alert(
-      "Clear scan history",
-      "This permanently deletes all scans, streaks, XP, and badges on this device. This can't be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Clear Everything", style: "destructive", onPress: () => clearHistory() },
-      ]
+    Share.share({ message: `${APP_NAME}: scan a barcode, see where it's registered, and vote with the community. ${APP_SHARE_URL}` }).catch(
+      () => {}
     );
   };
 
-  return (
-    <>
-      <Stack.Screen
-        options={{
-          title: "Settings",
-          headerTitleStyle: { fontSize: 17 },
-          headerRight: () => (
-            <Image
-              source={require("../../assets/images/icon.png")}
-              accessibilityLabel="Solidarity Logo"
-              accessibilityRole="image"
-              style={{ width: 28, height: 28, marginRight: 10, borderRadius: 6 }}
-            />
-          ),
-        }}
+  const toggleReminder = async (value: boolean) => {
+    setTogglingReminder(true);
+    try {
+      if (value) {
+        const granted = await requestNotificationPermission();
+        if (!granted) {
+          Alert.alert(
+            "Notifications are off",
+            "Allow notifications for Solidarity in your device settings to get streak reminders."
+          );
+          return;
+        }
+        await scheduleStreakReminders(gamification.lastScanLocalDate);
+      } else {
+        await cancelStreakReminders();
+      }
+      update({ streakReminderEnabled: value });
+    } finally {
+      setTogglingReminder(false);
+    }
+  };
+
+  const confirmClear = () =>
+    Alert.alert(
+      "Clear scan history?",
+      "Deletes every scan on this device, with the XP, streaks and badges earned from scanning. XP from voting is kept. This can't be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Clear history", style: "destructive", onPress: () => void clearHistory() },
+      ]
+    );
+
+  const preferencesGroup = (
+    <Group title="Preferences">
+      <ListRow
+        icon="phone-portrait-outline"
+        label="Haptic feedback"
+        subtitle="Vibrate on scans, votes and level-ups"
+        toggle={{ value: preferences.hapticsEnabled, onChange: (v) => update({ hapticsEnabled: v }) }}
       />
-      <ScreenContainer>
-        <StatusBar style="light" />
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          <Card>
-            <SectionHeader title="Preferences" />
-            <View style={styles.row}>
-              <View style={styles.rowText}>
-                <Text style={styles.rowLabel}>Haptic feedback</Text>
-                <Text style={styles.rowSubtext}>Vibrate on scan results and level-ups</Text>
-              </View>
-              <Switch
-                value={preferences.hapticsEnabled}
-                onValueChange={(value) => update({ hapticsEnabled: value })}
-              />
-            </View>
-            <View style={styles.row}>
-              <View style={styles.rowText}>
-                <Text style={styles.rowLabel}>Streak reminders</Text>
-                <Text style={styles.rowSubtext}>Daily nudge at 7pm if you haven&apos;t scanned</Text>
-              </View>
-              <Switch
-                value={preferences.streakReminderEnabled}
-                onValueChange={toggleStreakReminder}
-                disabled={togglingReminder}
-              />
-            </View>
-          </Card>
+      {Platform.OS !== "web" ? (
+        <ListRow
+          icon="notifications-outline"
+          iconColor={colors.gold}
+          label="Streak reminders"
+          subtitle="7 pm nudge, only on days you haven't scanned"
+          toggle={{ value: preferences.streakReminderEnabled, onChange: toggleReminder, disabled: togglingReminder }}
+          last
+        />
+      ) : null}
+    </Group>
+  );
 
-          <Card>
-            <SectionHeader title="Data" />
-            <TouchableOpacity style={styles.linkRow} onPress={handleClearHistory}>
-              <Ionicons name="trash" size={16} color={colors.negativeStrong} />
-              <Text style={[styles.linkText, { color: colors.negativeStrong }]}>
-                Clear scan history
-              </Text>
-            </TouchableOpacity>
-          </Card>
+  const dataGroup = (
+    <Group title="Your data">
+      <ListRow
+        icon="trash-outline"
+        label="Clear scan history"
+        subtitle={`${scans.length.toLocaleString()} scan${scans.length === 1 ? "" : "s"} stored on this device`}
+        destructive
+        onPress={confirmClear}
+        trailing="none"
+      />
+      <ListRow
+        icon="person-remove-outline"
+        iconColor={colors.subtext}
+        label="Delete account and data"
+        subtitle="How deletion works, and requesting it without the app"
+        onPress={() => openInAppBrowser(LINKS.deleteAccount)}
+        trailing="external"
+        last
+      />
+    </Group>
+  );
 
-          <Card>
-            <SectionHeader title="About" />
-            <Text style={styles.sectionTitle}>How It Works</Text>
-            <Text style={styles.paragraph}>
-              We read the GS1 prefix and map it to its country range.
-            </Text>
-            <Text style={[styles.sectionTitle, { marginTop: spacing.md }]}>
-              Important Context
-            </Text>
-            <Text style={styles.paragraph}>
-              This is barcode registration, not always manufacturing origin.
-            </Text>
-            <Text style={[styles.sectionTitle, { marginTop: spacing.md }]}>
-              Community-Driven Ratings
-            </Text>
-            <Text style={styles.paragraph}>
-              A country&apos;s color is decided by open voting from the Solidarity community —
-              never asserted by us. Anyone can see the vote counts; verified members can
-              vote or change their vote at any time from the Community tab.
-            </Text>
-            <Text style={[styles.sectionTitle, { marginTop: spacing.md }]}>Privacy First</Text>
-            <Text style={styles.paragraph}>
-              Scanning always happens on-device. If you optionally create an account, we
-              back up a small summary of your progress (level, streak, badges) to the
-              cloud so you don&apos;t lose it — your individual scan history and barcodes
-              never leave your phone.
-            </Text>
-          </Card>
+  const legalGroup = (
+    <Group title="Help & legal">
+      <ListRow icon="help-buoy-outline" label="Support & FAQ" onPress={() => openInAppBrowser(LINKS.support)} trailing="external" />
+      <ListRow
+        icon="shield-checkmark-outline"
+        iconColor={colors.positive}
+        label="Privacy policy"
+        onPress={() => openInAppBrowser(LINKS.privacy)}
+        trailing="external"
+      />
+      <ListRow
+        icon="document-text-outline"
+        iconColor={colors.subtext}
+        label="Terms of service"
+        onPress={() => openInAppBrowser(LINKS.terms)}
+        trailing="external"
+        last
+      />
+    </Group>
+  );
 
-          <Card>
-            <SectionHeader title={`Enjoying ${APP_NAME}?`} />
-            <TouchableOpacity style={styles.linkRow} onPress={shareApp}>
-              <Ionicons name="share-social" size={16} color={colors.accent} />
-              <Text style={styles.linkText}>Share {APP_NAME}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.linkRow} onPress={openStoreLink}>
-              <Ionicons name="star" size={16} color={colors.gold} />
-              <Text style={styles.linkText}>Rate on the Play Store</Text>
-            </TouchableOpacity>
-          </Card>
+  const shareGroup = (
+    <Group title={`Enjoying ${APP_NAME}?`}>
+      <ListRow icon="share-social-outline" label={`Share ${APP_NAME}`} onPress={shareApp} />
+      <ListRow
+        icon="star-outline"
+        iconColor={colors.gold}
+        label={Platform.OS === "ios" ? "Rate on the App Store" : "Rate on Google Play"}
+        onPress={() => void openStoreReview()}
+        trailing="external"
+        last
+      />
+    </Group>
+  );
 
-          <Text style={styles.footer}>
-            {APP_NAME} v{Constants.expoConfig?.version ?? "1.0"} · Built with ❤️ and Solidarity.
-          </Text>
-        </ScrollView>
-      </ScreenContainer>
-    </>
+  const about = (
+    <Group title="About">
+      <View style={styles.about}>
+        {[
+          { title: "How it works", text: "We read the barcode's GS1 prefix and match it to the country range it's registered in." },
+          { title: "Important context", text: "Registration country isn't always where a product was made." },
+          {
+            title: "Community-driven ratings",
+            text: "A country's colour is decided by open voting from the Solidarity community, never by us. Anyone can see the counts. Verified members can vote or change their vote at any time.",
+          },
+          {
+            title: "Private by design",
+            text: "Scanning happens on your device and your scan history never leaves it. With an optional account, a summary of your progress and your votes is backed up so you don't lose them.",
+          },
+        ].map((item) => (
+          <View key={item.title} style={styles.aboutItem}>
+            <Text style={styles.aboutTitle}>{item.title}</Text>
+            <Text style={styles.aboutText}>{item.text}</Text>
+          </View>
+        ))}
+      </View>
+    </Group>
+  );
+
+  const footer = (
+    <View style={styles.footer}>
+      <Image source={logo} style={styles.logo} contentFit="contain" accessibilityLabel={`${APP_NAME} logo`} />
+      <Text style={styles.footerName}>{APP_NAME}</Text>
+      <Text style={styles.footerVersion}>
+        Version {version}
+        {build ? ` (${build})` : ""}
+      </Text>
+    </View>
+  );
+
+  return (
+    <Screen title="Settings" width={columns > 1 ? "wide" : "readable"}>
+      {columns > 1 ? (
+        <View style={styles.split}>
+          <View style={styles.col}>
+            {preferencesGroup}
+            {dataGroup}
+            {legalGroup}
+          </View>
+          <View style={styles.col}>
+            {shareGroup}
+            {about}
+            {footer}
+          </View>
+        </View>
+      ) : (
+        <>
+          {preferencesGroup}
+          {dataGroup}
+          {legalGroup}
+          {shareGroup}
+          {about}
+          {footer}
+        </>
+      )}
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  content: {
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xxl,
+  split: {
+    flexDirection: "row",
+    gap: spacing.lg,
+    alignItems: "flex-start",
+  },
+  col: {
+    flex: 1,
+    gap: spacing.lg,
+  },
+  group: {
+    gap: spacing.sm,
+  },
+  groupTitle: {
+    ...typography.overline,
+    color: colors.muted,
+    marginLeft: spacing.xs,
+  },
+  about: {
+    padding: spacing.lg,
     gap: spacing.md,
   },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: spacing.sm,
+  aboutItem: {
+    gap: 2,
   },
-  rowText: {
-    flex: 1,
-    paddingRight: spacing.md,
+  aboutTitle: {
+    ...typography.bodyStrong,
+    color: colors.text,
   },
-  rowLabel: {
+  aboutText: {
     ...typography.body,
-    color: colors.text,
-    fontWeight: "700",
-  },
-  rowSubtext: {
-    ...typography.caption,
+    fontSize: 14,
     color: colors.subtext,
-    marginTop: 2,
-  },
-  sectionTitle: {
-    ...typography.heading,
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  paragraph: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: colors.subtext,
-  },
-  linkRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-    backgroundColor: colors.panelSoft,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingVertical: spacing.sm + 2,
-    paddingHorizontal: spacing.md,
-  },
-  linkText: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: "700",
   },
   footer: {
-    fontSize: 12,
-    textAlign: "center",
+    alignItems: "center",
+    gap: spacing.xs,
+    paddingVertical: spacing.lg,
+  },
+  logo: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    marginBottom: spacing.xs,
+  },
+  footerName: {
+    ...typography.bodyStrong,
+    color: colors.text,
+  },
+  footerVersion: {
+    ...typography.caption,
     color: colors.muted,
-    marginTop: spacing.sm,
   },
 });

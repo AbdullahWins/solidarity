@@ -1,363 +1,269 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router, Stack } from "expo-router";
-import { StatusBar } from "expo-status-bar";
-import React, { useMemo, useState } from "react";
-import { Alert, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
+import { router } from "expo-router";
+import React, { useCallback, useMemo, useState } from "react";
+import { Alert, FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
 
 import { Card } from "../../components/ui/Card";
-import { ScreenContainer } from "../../components/ui/ScreenContainer";
+import { EmptyState } from "../../components/ui/EmptyState";
+import { IconButton } from "../../components/ui/IconButton";
+import { Screen, ScreenHeader, useScreenInsets } from "../../components/ui/Screen";
 import { SearchField } from "../../components/ui/SearchField";
-import { SectionHeader } from "../../components/ui/SectionHeader";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { VoteButtons } from "../../components/voting/VoteButtons";
-import { colors, radius, spacing, typography } from "../../constants/theme";
+import { colors, layout as sizes, radius, spacing, typography } from "../../constants/theme";
 import { useAuth } from "../../contexts/AuthContext";
 import { useCountryVotes } from "../../hooks/useCountryVotes";
+import { useLayout } from "../../hooks/useLayout";
 import { useScanHistory } from "../../hooks/useScanHistory";
-import { getVotableCountryNames, type CountryTally, type VoteChoice } from "../../lib/votes";
+import { getVotableCountryNames, type VoteChoice } from "../../lib/votes";
 
 const ALL_COUNTRIES = getVotableCountryNames();
+type Tab = "trending" | "all" | "mine";
 
 export default function CommunityScreen() {
   const { user } = useAuth();
   const { scans, gamification, applyGamificationState } = useScanHistory();
-  const { tallies, getTally, getVerdict, myVote, castVote, loadingTallies, reload } =
-    useCountryVotes(scans, gamification, applyGamificationState);
+  const { tallies, getTally, getVerdict, myVote, castVote, loadingTallies, reload } = useCountryVotes(
+    scans,
+    gamification,
+    applyGamificationState
+  );
+  const layout = useLayout();
+  const pad = useScreenInsets();
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [tab, setTab] = useState<"trending" | "all" | "mine">("all");
-  const showMyVotes = tab === "mine";
+  const [tab, setTab] = useState<Tab>("all");
 
-  const closeSearch = () => {
-    setSearchOpen(false);
-    setSearch("");
-  };
+  const columns = layout.columns;
+  const maxWidth = sizes.wide;
+  const sidePad = Math.max(pad.paddingRight, (layout.width - (layout.useRail ? 88 : 0) - maxWidth) / 2);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await reload(true); // force: bypass the tally cache for an explicit pull-to-refresh
+    await reload(true);
     setRefreshing(false);
   };
 
-  const myVotedCountries = useMemo(
-    () => ALL_COUNTRIES.filter((country) => myVote(country) !== undefined),
-    [myVote]
+  const myVotedCountries = useMemo(() => ALL_COUNTRIES.filter((c) => myVote(c) !== undefined), [myVote]);
+
+  const trending = useMemo(
+    () =>
+      ALL_COUNTRIES.map((country) => {
+        const t = getTally(country);
+        return { country, total: (t?.upvotes ?? 0) + (t?.downvotes ?? 0) };
+      })
+        .filter((e) => e.total > 0)
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 20)
+        .map((e) => e.country),
+    [getTally]
   );
 
-  const trending = useMemo(() => {
-    return ALL_COUNTRIES.map((country) => {
-      const tally = getTally(country);
-      const total = (tally?.upvotes ?? 0) + (tally?.downvotes ?? 0);
-      return { country, total };
-    })
-      .filter((entry) => entry.total > 0)
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 20)
-      .map((entry) => entry.country);
-  }, [getTally]);
-
-  const filteredCountries = useMemo(() => {
+  const data = useMemo(() => {
     const base = tab === "mine" ? myVotedCountries : tab === "trending" ? trending : ALL_COUNTRIES;
-    const query = search.trim().toLowerCase();
-    if (!query) return base;
-    return base.filter((country) => country.toLowerCase().includes(query));
+    const q = search.trim().toLowerCase();
+    return q ? base.filter((c) => c.toLowerCase().includes(q)) : base;
   }, [search, tab, myVotedCountries, trending]);
 
   const communityStats = useMemo(() => {
-    let upvotes = 0;
-    let downvotes = 0;
-    let votedCountries = 0;
-    for (const tally of Object.values(tallies)) {
-      const total = (tally.upvotes ?? 0) + (tally.downvotes ?? 0);
-      if (total > 0) votedCountries += 1;
-      upvotes += tally.upvotes ?? 0;
-      downvotes += tally.downvotes ?? 0;
+    let up = 0;
+    let down = 0;
+    let voted = 0;
+    for (const t of Object.values(tallies)) {
+      if ((t.upvotes ?? 0) + (t.downvotes ?? 0) > 0) voted += 1;
+      up += t.upvotes ?? 0;
+      down += t.downvotes ?? 0;
     }
-    return { upvotes, downvotes, total: upvotes + downvotes, votedCountries };
+    return { up, down, total: up + down, voted };
   }, [tallies]);
 
-  const handleVote = async (country: string, choice: VoteChoice) => {
-    const outcome = await castVote(country, choice);
-    if (!outcome.ok) {
-      if (outcome.reason === "signed-out") {
-        router.push("/auth");
-      } else if (outcome.reason === "unverified") {
-        Alert.alert(
-          "Verify your email",
-          "Verify your email address in Profile to vote on countries."
-        );
-      }
-    }
-  };
+  const handleVote = useCallback(
+    async (country: string, choice: VoteChoice) => {
+      const outcome = await castVote(country, choice);
+      if (outcome.ok) return;
+      if (outcome.reason === "signed-out") router.push("/auth");
+      else if (outcome.reason === "unverified")
+        Alert.alert("Verify your email", "Confirm your email address from the Profile tab to vote.");
+      else Alert.alert("Vote not saved", "Check your connection and try again.");
+    },
+    [castVote]
+  );
 
-  const renderRow = (country: string) => {
+  const renderItem = ({ item: country }: { item: string }) => {
     const verdict = getVerdict(country);
-    const tally: CountryTally | undefined = getTally(country);
-
-    if (showMyVotes) {
-      return (
-        <Card key={country} tone={verdict ? "positive" : "negative"} style={styles.myVoteRow}>
+    const tally = getTally(country);
+    const mine = myVote(country);
+    return (
+      <View style={[styles.cell, { width: `${100 / columns}%`, paddingHorizontal: columns > 1 ? spacing.xs : 0 }]}>
+        <Card tone={verdict ? "default" : "negative"} style={styles.row}>
           <View style={styles.rowTop}>
             <View style={[styles.dot, { backgroundColor: verdict ? colors.positive : colors.negative }]} />
-            <Text style={styles.rowTitle}>{country}</Text>
+            <Text style={styles.rowTitle} numberOfLines={1}>
+              {country}
+            </Text>
+            {mine ? (
+              <View style={styles.mineTag}>
+                <Text style={styles.mineText}>Voted</Text>
+              </View>
+            ) : null}
           </View>
-          <VoteButtons
-            tally={tally}
-            myChoice={myVote(country)}
-            onPress={(choice) => handleVote(country, choice)}
-            compact
-          />
+          <VoteButtons tally={tally} myChoice={mine} onPress={(choice) => handleVote(country, choice)} compact showBar />
         </Card>
-      );
-    }
-
-    return (
-      <Card key={country} tone={verdict ? "positive" : "negative"} style={styles.row}>
-        <View style={styles.rowTop}>
-          <View style={[styles.dot, { backgroundColor: verdict ? colors.positive : colors.negative }]} />
-          <Text style={styles.rowTitle}>{country}</Text>
-        </View>
-        <View style={styles.countRow}>
-          <View style={styles.countPill}>
-            <Ionicons name="arrow-up-circle" size={16} color={colors.positive} />
-            <Text style={styles.countText}>{tally?.upvotes ?? 0}</Text>
-          </View>
-          <View style={styles.countPill}>
-            <Ionicons name="arrow-down-circle" size={16} color={colors.negative} />
-            <Text style={styles.countText}>{tally?.downvotes ?? 0}</Text>
-          </View>
-        </View>
-      </Card>
+      </View>
     );
   };
 
+  const header = (
+    <View style={styles.headerWrap}>
+      <ScreenHeader
+        title="Community"
+        subtitle="Every country's colour is set by open voting, not by us."
+        right={
+          <IconButton
+            icon={searchOpen ? "close" : "search"}
+            onPress={() => {
+              if (searchOpen) setSearch("");
+              setSearchOpen((v) => !v);
+            }}
+            active={searchOpen}
+            accessibilityLabel={searchOpen ? "Close search" : "Search countries"}
+          />
+        }
+      />
+
+      <Card tone="hero">
+        <View style={styles.statsRow}>
+          {[
+            { label: "Votes", value: communityStats.total, color: colors.text },
+            { label: "Up", value: communityStats.up, color: colors.positive },
+            { label: "Down", value: communityStats.down, color: colors.negative },
+            { label: "Countries", value: communityStats.voted, color: colors.gold },
+          ].map((s) => (
+            <View key={s.label} style={styles.stat}>
+              <Text style={[styles.statValue, { color: s.color }]}>{s.value.toLocaleString()}</Text>
+              <Text style={styles.statLabel}>{s.label}</Text>
+            </View>
+          ))}
+        </View>
+        {!user ? (
+          <Text style={styles.heroHint}>
+            <Ionicons name="lock-closed" size={12} color={colors.subtext} /> Anyone can see the counts. Sign in and verify
+            your email to vote.
+          </Text>
+        ) : null}
+      </Card>
+
+      {searchOpen ? (
+        <SearchField placeholder="Search countries…" value={search} onChangeText={setSearch} autoFocus />
+      ) : (
+        <SegmentedControl
+          segments={[
+            { key: "trending", label: "Trending" },
+            { key: "all", label: "All" },
+            ...(user ? [{ key: "mine", label: `My votes${myVotedCountries.length ? ` · ${myVotedCountries.length}` : ""}` }] : []),
+          ]}
+          value={tab}
+          onChange={(key) => setTab(key as Tab)}
+        />
+      )}
+    </View>
+  );
+
+  const empty = loadingTallies ? (
+    <Text style={styles.loading}>Loading vote counts…</Text>
+  ) : (
+    <EmptyState
+      icon={tab === "mine" ? "thumbs-up-outline" : "search-outline"}
+      text={
+        search
+          ? `No countries match “${search}”.`
+          : tab === "mine"
+            ? "You haven't voted yet. Scan a product or pick a country to cast your first vote."
+            : "No trending countries yet. Be the first to vote."
+      }
+    />
+  );
+
   return (
-    <>
-      <Stack.Screen options={{ title: "Community" }} />
-      <ScreenContainer>
-        <StatusBar style="light" />
-        <ScrollView
-          contentContainerStyle={styles.content}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.text} />
-          }
-        >
-          <Card style={styles.hero}>
-            <View style={styles.heroHeader}>
-              <View style={styles.heroBadge}>
-                <Ionicons name="people" size={16} color={colors.accent} />
-              </View>
-              <Text style={styles.heroTitle}>Community-driven, not developer-asserted</Text>
-            </View>
-            <Text style={styles.heroText}>
-              Every country&apos;s color is decided by open voting from Solidarity users — not by
-              us. Scan a product to vote, or manage your votes below.
-            </Text>
-
-            <View style={styles.heroStatsRow}>
-              <View style={styles.heroStat}>
-                <Text style={styles.heroStatValue}>{communityStats.total}</Text>
-                <Text style={styles.heroStatLabel}>Votes</Text>
-              </View>
-              <View style={styles.heroStat}>
-                <Text style={[styles.heroStatValue, { color: colors.positive }]}>
-                  {communityStats.upvotes}
-                </Text>
-                <Text style={styles.heroStatLabel}>Up</Text>
-              </View>
-              <View style={styles.heroStat}>
-                <Text style={[styles.heroStatValue, { color: colors.negative }]}>
-                  {communityStats.downvotes}
-                </Text>
-                <Text style={styles.heroStatLabel}>Down</Text>
-              </View>
-              <View style={styles.heroStat}>
-                <Text style={[styles.heroStatValue, { color: colors.gold }]}>
-                  {communityStats.votedCountries}
-                </Text>
-                <Text style={styles.heroStatLabel}>Countries</Text>
-              </View>
-            </View>
-          </Card>
-
-          <View style={styles.toolbarRow}>
-            {searchOpen ? (
-              <Animated.View
-                entering={FadeIn.duration(150)}
-                exiting={FadeOut.duration(100)}
-                layout={LinearTransition.duration(200)}
-                style={styles.toolbarGrow}
-              >
-                <SearchField
-                  placeholder="Search countries…"
-                  value={search}
-                  onChangeText={setSearch}
-                  autoFocus
-                />
-              </Animated.View>
-            ) : (
-              <Animated.View
-                entering={FadeIn.duration(150)}
-                exiting={FadeOut.duration(100)}
-                layout={LinearTransition.duration(200)}
-                style={styles.toolbarGrow}
-              >
-                <SegmentedControl
-                  segments={[
-                    { key: "trending", label: "Trending" },
-                    { key: "all", label: "All Countries" },
-                    ...(user ? [{ key: "mine", label: "My Votes" }] : []),
-                  ]}
-                  value={tab}
-                  onChange={(key) => setTab(key as "trending" | "all" | "mine")}
-                />
-              </Animated.View>
-            )}
-
-            <TouchableOpacity
-              style={styles.searchToggle}
-              onPress={() => (searchOpen ? closeSearch() : setSearchOpen(true))}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Ionicons
-                name={searchOpen ? "close" : "search"}
-                size={19}
-                color={searchOpen ? colors.accent : colors.text}
-              />
-            </TouchableOpacity>
-          </View>
-
-          <View>
-            <SectionHeader
-              title={
-                search
-                  ? "Results"
-                  : tab === "mine"
-                    ? `My Votes${myVotedCountries.length > 0 ? ` (${myVotedCountries.length})` : ""}`
-                    : tab === "trending"
-                      ? "Trending"
-                      : "All Countries"
-              }
-            />
-            {loadingTallies ? (
-              <Text style={styles.introText}>Loading vote counts…</Text>
-            ) : filteredCountries.length === 0 ? (
-              <Text style={styles.introText}>
-                {tab === "mine"
-                  ? "You haven't voted on any countries yet — scan a product to cast your first vote."
-                  : tab === "trending"
-                    ? "No trending countries yet — be the first to vote."
-                    : `No countries match "${search}".`}
-              </Text>
-            ) : (
-              <View style={{ gap: spacing.sm }}>{filteredCountries.map(renderRow)}</View>
-            )}
-          </View>
-        </ScrollView>
-      </ScreenContainer>
-    </>
+    <Screen scroll={false}>
+      <FlatList
+        key={`cols-${columns}`}
+        data={data}
+        keyExtractor={(c) => c}
+        numColumns={columns}
+        renderItem={renderItem}
+        ListHeaderComponent={header}
+        ListEmptyComponent={empty}
+        contentContainerStyle={{
+          paddingTop: pad.paddingTop,
+          paddingBottom: pad.paddingBottom,
+          paddingLeft: layout.useRail ? sidePad : Math.max(pad.paddingLeft, sidePad),
+          paddingRight: sidePad,
+        }}
+        columnWrapperStyle={columns > 1 ? styles.columnWrapper : undefined}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        showsVerticalScrollIndicator={false}
+        initialNumToRender={12}
+        windowSize={7}
+        removeClippedSubviews
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.text}
+            colors={[colors.accentStrong]}
+            progressBackgroundColor={colors.surfaceHigh}
+            progressViewOffset={pad.paddingTop}
+          />
+        }
+      />
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  content: {
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xxl,
+  headerWrap: {
     gap: spacing.lg,
+    marginBottom: spacing.lg,
   },
-  hero: {
-    borderColor: `${colors.accent}33`,
-  },
-  heroHeader: {
+  statsRow: {
     flexDirection: "row",
+  },
+  stat: {
+    flex: 1,
     alignItems: "center",
-    gap: spacing.sm,
-    marginBottom: spacing.xs,
   },
-  heroBadge: {
-    width: 26,
-    height: 26,
-    borderRadius: radius.pill,
-    backgroundColor: `${colors.accent}1f`,
-    alignItems: "center",
-    justifyContent: "center",
+  statValue: {
+    ...typography.stat,
   },
-  heroTitle: {
-    ...typography.heading,
-    color: colors.text,
-    flexShrink: 1,
-  },
-  heroText: {
-    ...typography.body,
+  statLabel: {
+    ...typography.overline,
     color: colors.subtext,
-    lineHeight: 19,
+    marginTop: 2,
   },
-  heroStatsRow: {
-    flexDirection: "row",
+  heroHint: {
+    ...typography.caption,
+    color: colors.subtext,
+    fontWeight: "500",
     marginTop: spacing.md,
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    textAlign: "center",
   },
-  heroStat: {
-    flex: 1,
-    alignItems: "center",
+  columnWrapper: {
+    marginHorizontal: -spacing.xs,
   },
-  heroStatValue: {
-    ...typography.body,
-    fontWeight: "800",
-    color: colors.text,
-  },
-  heroStatLabel: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: colors.subtext,
-    textTransform: "uppercase",
-    letterSpacing: 0.3,
-    marginTop: 1,
-  },
-  introText: {
-    ...typography.body,
-    color: colors.subtext,
-    lineHeight: 19,
-  },
-  toolbarRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  toolbarGrow: {
-    flex: 1,
-  },
-  searchToggle: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.pill,
-    backgroundColor: colors.panelSoft,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: "center",
-    justifyContent: "center",
+  cell: {
+    paddingBottom: spacing.sm,
   },
   row: {
     padding: spacing.md,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  myVoteRow: {
-    padding: spacing.md,
-    gap: spacing.sm,
+    gap: spacing.md,
   },
   rowTop: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
-    flexShrink: 1,
   },
   dot: {
     width: 8,
@@ -365,26 +271,25 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
   },
   rowTitle: {
-    ...typography.body,
+    ...typography.bodyStrong,
     color: colors.text,
-    fontWeight: "700",
+    flex: 1,
   },
-  countRow: {
-    flexDirection: "row",
-    gap: spacing.sm,
-  },
-  countPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: colors.panelSoft,
+  mineTag: {
+    backgroundColor: "rgba(142, 166, 255, 0.14)",
     borderRadius: radius.pill,
     paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
+    paddingVertical: 2,
   },
-  countText: {
+  mineText: {
     ...typography.caption,
-    color: colors.text,
-    fontWeight: "700",
+    color: colors.accent,
+    fontSize: 11,
+  },
+  loading: {
+    ...typography.body,
+    color: colors.subtext,
+    textAlign: "center",
+    paddingVertical: spacing.xl,
   },
 });
