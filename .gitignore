@@ -41,3 +41,6 @@ yarn-error.*
 
 app-example
 firestore-debug.log
+
+# Latest release outputs (AAB, mapping, native symbols)
+/Build/
