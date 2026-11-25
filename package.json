@@ -15,6 +15,7 @@
     "verify": "npm run typecheck && npm run lint && npm test",
     "icons": "python scripts/generate-icons.py",
     "screenshots": "node scripts/screenshots.mjs",
+    "store-images": "node scripts/store-images.mjs",
     "flags": "node scripts/generate-flags.mjs",
     "test:rules": "node scripts/test-rules.mjs"
   },

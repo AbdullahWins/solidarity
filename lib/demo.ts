@@ -40,7 +40,11 @@ export const DEMO_LEADERBOARD: LeaderboardEntry[] = [
 
 /** Product details shown for the screenshot script's typed codes (no network). */
 export const DEMO_PRODUCTS: Record<string, { name: string; brand: string; owner?: string; categories?: string[] }> = {
-  "5601234567892": { name: "Extra virgin olive oil 750 ml", brand: "Quinta Demo" },
+  "5601234567892": { name: "Extra virgin olive oil 750 ml", brand: "Quinta do Vale" },
   "4006381333931": { name: "Textmarker highlighter, yellow", brand: "Stabilo", owner: "Schwan-Stabilo Group" },
   "6901234567892": { name: "Dark chocolate bar 85%", brand: "Demo Cocoa", categories: ["en:dark-chocolates"] },
+  // Store-image products: fictional brands, neutral examples.
+  "8941234567896": { name: "Premium black tea 400 g", brand: "Chayana" },
+  "4001234567891": { name: "Dark chocolate bar 85%", brand: "Nocturo", categories: ["en:dark-chocolates"] },
+  "4501234567896": { name: "Matcha green tea 100 g", brand: "Kirakoi", owner: "Aokawa Foods Group" },
 };
